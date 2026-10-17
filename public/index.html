@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Assessment SPMB — SD Anak Saleh</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Roboto', 'ui-sans-serif', 'system-ui', 'sans-serif'] },
+          fontWeight: {
+            semibold: '700',
+            extrabold: '900'
+          },
+          boxShadow: {
+            card: '0 1px 2px rgb(15 23 42 / 0.05), 0 10px 30px -12px rgb(15 23 42 / 0.15)',
+            soft: '0 2px 10px -4px rgb(15 23 42 / 0.08)'
+          }
+        }
+      }
+    };
+  </script>
+  <style type="text/tailwindcss">
+    .btn-primary { @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-teal-600 text-white font-bold text-sm shadow-lg shadow-teal-600/25 hover:bg-teal-700 active:scale-[.98] transition disabled:opacity-40 disabled:pointer-events-none; }
+    .btn-soft { @apply inline-flex items-center justify-center gap-2 px-4 py-3 rounded-2xl bg-slate-100 text-slate-700 font-bold text-sm hover:bg-slate-200 active:scale-[.98] transition disabled:opacity-40 disabled:pointer-events-none; }
+    .btn-danger { @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-rose-600 text-white font-bold text-sm shadow-lg shadow-rose-600/25 hover:bg-rose-700 active:scale-[.98] transition; }
+    .btn-glass { @apply inline-flex items-center justify-center gap-2 px-5 py-3 rounded-2xl bg-white/15 hover:bg-white/25 text-white font-bold text-sm border border-white/25 backdrop-blur transition active:scale-[.98]; }
+    .card { @apply bg-white rounded-2xl border border-slate-200/80 shadow-card; }
+    .input { @apply w-full rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-sm font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500 transition; }
+    .input.pad-icon { padding-left: 2.75rem; }
+    .label { @apply block text-xs font-bold text-slate-500 uppercase tracking-wide mb-1.5; }
+    .badge { @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-extrabold whitespace-nowrap; }
+    .chip-filter { @apply px-3.5 py-2 rounded-xl text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200 transition; }
+    .chip-filter.on { @apply bg-teal-600 text-white shadow shadow-teal-600/30; }
+    .navlink { @apply px-3.5 py-2 rounded-xl text-sm font-bold text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition; }
+    .navlink.on { @apply bg-teal-50 text-teal-700; }
+    .botnav { @apply flex min-w-0 flex-1 flex-col items-center justify-center gap-1 px-1 py-2 text-[10px] font-bold leading-none text-slate-400 transition; -webkit-tap-highlight-color: transparent; }
+    .botnav > svg { width: 20px; height: 20px; flex: 0 0 20px; }
+    .botnav > span, .botnav > .botnav-label { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .botnav.on { @apply text-teal-600; }
+    .botnav:active { background: rgb(20 184 166 / .08); }
+    #bottomnav { min-height: 58px; padding-top: 3px; box-shadow: 0 -6px 20px rgb(15 23 42 / .06); }
+    .bar-track { @apply h-2 rounded-full bg-slate-100 overflow-hidden; }
+    .bar-fill { @apply h-full rounded-full transition-all duration-500; }
+    .step-pill { @apply flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[11px] font-extrabold text-slate-400 bg-slate-100/80 transition shrink-0; }
+    .step-pill.done { @apply bg-teal-50 text-teal-700; }
+    .step-pill.active { @apply bg-teal-600 text-white shadow-md shadow-teal-600/30; }
+  </style>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+</head>
+<body class="bg-slate-50 font-sans text-slate-800 min-h-screen antialiased">
+
+  <!-- ═══ BOOT ═══ -->
+  <div id="boot" class="fixed inset-0 z-50 bg-slate-50 flex flex-col items-center justify-center gap-5 px-6 text-center">
+    <div class="w-16 h-16 rounded-3xl bg-gradient-to-br from-teal-500 to-emerald-400 grid place-items-center text-white shadow-xl shadow-teal-500/30 animate-pulse">
+      <svg class="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+    </div>
+    <div>
+      <h1 class="font-extrabold text-lg text-slate-800">Assessment SPMB</h1>
+      <p class="text-sm text-slate-500">SD Anak Saleh • Tahun Pelajaran <span id="boot-tp">…</span></p>
+    </div>
+    <div class="flex items-center gap-2 text-teal-600 text-sm font-bold">
+      <svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="none"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/></svg>
+      Menyiapkan aplikasi…
+    </div>
+    <div id="boot-status" class="max-w-md w-full"></div>
+  </div>
+
+  <!-- ═══ LOGIN ═══ -->
+  <div id="login" class="hidden fixed inset-0 z-50 bg-slate-950 overflow-hidden font-sans">
+    <!-- Modern Gradient Mesh Background -->
+    <div class="absolute inset-0 pointer-events-none overflow-hidden">
+      <div class="absolute -top-[20%] -left-[10%] w-[70%] h-[70%] rounded-full bg-indigo-600/20 blur-[120px] mix-blend-screen"></div>
+      <div class="absolute top-[40%] -right-[10%] w-[50%] h-[60%] rounded-full bg-emerald-600/20 blur-[120px] mix-blend-screen"></div>
+      <div class="absolute -bottom-[20%] left-[20%] w-[60%] h-[50%] rounded-full bg-teal-600/20 blur-[100px] mix-blend-screen"></div>
+    </div>
+    
+    <div class="relative min-h-full flex flex-col items-center justify-center p-6">
+      <div class="w-full max-w-md">
+        <!-- Glassmorphism Card -->
+        <div class="bg-white/5 backdrop-blur-2xl border border-white/10 rounded-[2rem] p-8 sm:p-10 shadow-2xl shadow-black/50">
+          <div class="text-center mb-10">
+            <div class="w-16 h-16 mx-auto rounded-2xl bg-white/5 border border-white/10 grid place-items-center text-white shadow-lg mb-6">
+              <svg class="w-8 h-8 opacity-80" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+            </div>
+            <h1 class="font-extrabold text-2xl text-white tracking-tight">Assessment SPMB</h1>
+            <p class="text-slate-400 mt-2 font-medium tracking-wide text-sm"><span class="brand-sekolah">SD Anak Saleh</span> • TP <span class="brand-tp">…</span></p>
+          </div>
+          
+          <div class="space-y-5">
+            <div>
+              <label for="li-user" class="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">Username</label>
+              <input id="li-user" class="w-full bg-black/20 border border-white/5 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 transition-all text-sm" autocomplete="username" autocapitalize="none" placeholder="cth: ustabdullah">
+            </div>
+            <div>
+              <label for="li-pin" class="block text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-2">PIN</label>
+              <input id="li-pin" type="password" inputmode="numeric" class="w-full bg-black/20 border border-white/5 text-white placeholder-slate-500 rounded-xl px-4 py-3.5 focus:outline-none focus:ring-1 focus:ring-teal-500 focus:border-teal-500 transition-all text-sm" autocomplete="current-password" placeholder="••••">
+            </div>
+            <button id="li-btn" class="w-full flex justify-center items-center gap-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold rounded-xl px-4 py-3.5 transition-all active:scale-[0.98] mt-4 shadow-lg shadow-teal-500/20" onclick="doLogin()">Masuk ke Sistem</button>
+            <p id="li-note" role="alert" aria-live="polite" class="text-xs text-center text-rose-400 font-bold min-h-[1rem] mt-2"></p>
+          </div>
+        </div>
+        
+        <!-- Footer info -->
+        <p class="text-center text-slate-500 text-[11px] mt-6 font-medium">
+          Belum punya akun? Hubungi Admin / Koordinator SPMB.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ APP ═══ -->
+  <div id="app" class="hidden min-h-screen flex flex-col">
+    <header class="sticky top-0 z-40 bg-white/85 backdrop-blur-md border-b border-slate-200/70">
+      <div class="max-w-5xl mx-auto px-4 h-16 flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-br from-teal-500 to-emerald-400 text-white grid place-items-center shadow-lg shadow-teal-500/25 shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></svg>
+        </div>
+        <div class="min-w-0">
+          <p class="font-extrabold leading-tight truncate">Assessment SPMB</p>
+          <p class="text-[11px] text-slate-500 truncate"><span class="brand-sekolah">SD Anak Saleh</span> • TP <span class="brand-tp">…</span></p>
+        </div>
+        <nav class="ml-auto hidden sm:flex items-center gap-1.5">
+          <button class="navlink" data-view="dashboard" data-role="staff" onclick="goView('dashboard')">Dashboard</button>
+          <button class="navlink" data-view="riwayat" onclick="goView('riwayat')">Penilaian</button>
+          <button class="navlink" data-view="pengguna" data-role="admin" onclick="goView('pengguna')">Pengguna</button>
+          <button class="navlink" data-view="soal" data-role="admin" onclick="goView('soal')">Soal Assessment</button>
+          <button class="btn-primary !py-2.5 !px-4" onclick="wizardStart()">
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            Baru
+          </button>
+        </nav>
+        <div id="user-chip" class="hidden sm:flex items-center gap-2 pl-3 ml-1 border-l border-slate-200">
+          <div class="text-right leading-tight">
+            <p id="uc-nama" class="text-xs font-extrabold text-slate-700 max-w-[130px] truncate"></p>
+            <p id="uc-role" class="badge bg-sky-100 text-sky-700 !px-2 !py-0.5 !text-[10px]"></p>
+          </div>
+        </div>
+        <button onclick="doLogout()" title="Keluar" aria-label="Keluar dari aplikasi" class="hidden sm:grid w-10 h-10 rounded-xl bg-slate-100 hover:bg-rose-50 hover:text-rose-500 text-slate-500 place-items-center transition shrink-0">
+          <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <main id="view" class="flex-1 w-full max-w-5xl mx-auto px-4 py-5 pb-28 sm:pb-10 min-h-[70vh]"></main>
+
+    <nav id="bottomnav" class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200/70 flex" style="padding-bottom:env(safe-area-inset-bottom)">
+      <button data-view="dashboard" data-role="staff" onclick="goView('dashboard')" class="botnav flex-1">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+        <span class="botnav-label">Dashboard</span>
+      </button>
+      <button data-view="riwayat" onclick="goView('riwayat')" class="botnav flex-1">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        <span class="botnav-label">Penilaian</span>
+      </button>
+      <button onclick="wizardStart()" class="botnav flex-1">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        <span class="botnav-label">Assessment</span>
+      </button>
+      <button data-view="pengguna" data-role="admin" onclick="goView('pengguna')" class="botnav flex-1">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        <span class="botnav-label">Pengguna</span>
+      </button>
+      <button data-view="soal" onclick="goView('soal')" class="botnav flex-1" data-role="admin">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <span class="botnav-label">Soal</span>
+      </button>
+      <button onclick="doLogout()" class="botnav flex-1">
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        <span class="botnav-label">Keluar</span>
+      </button>
+    </nav>
+  </div>
+
+  <div id="toast-root" role="status" aria-live="polite" class="fixed top-4 inset-x-4 sm:inset-x-auto sm:right-4 z-[70] flex flex-col items-center sm:items-end gap-2 pointer-events-none"></div>
+  <div id="modal-root"></div>
+
+  <!-- Firebase SDK v10 (Compat) -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+
+  <!-- App Modular Scripts -->
+  <script src="/js/config.js"></script>
+  <script src="/js/calc.js"></script>
+  <script src="/js/firebase-config.js"></script>
+  <script src="/js/firebase-service.js"></script>
+  <script src="/js/app.js"></script>
+  <script src="/js/wizard.js"></script>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      App.init();
+      ['li-user', 'li-pin'].forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
+      });
+    });
+  </script>
+</body>
+</html>

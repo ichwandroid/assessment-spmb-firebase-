@@ -1,0 +1,123 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: config
+    // Document ID: app
+    // Fields:
+    //   - sekolah: string (required) - nama sekolah
+    //   - tahunPelajaran: string (required) - tahun pelajaran aktif
+    //   - kode_a_min: number (required) - ambang batas Kode A
+    //   - kode_b_min: number (required) - ambang batas Kode B
+    //   - kode_include_english: bool (required) - status sertakan english
+    //   - form_schema: map (optional) - skema formulir override
+    //
+    // Collection: users
+    // Document ID: {username}
+    // Fields:
+    //   - username: string (required, immutable)
+    //   - nama: string (required)
+    //   - pinHash: string (required)
+    //   - role: string (required, in ['ADMIN', 'KOORDINATOR', 'ASSESSOR'])
+    //   - assignments: list of strings
+    //   - aktif: bool (required)
+    //   - pinHarusDiganti: bool (required)
+    //   - dibuat: string
+    //   - diubah: string
+    //
+    // Collection: peserta
+    // Document ID: {idPeserta} (e.g. P0001)
+    // Fields:
+    //   - id: string (required)
+    //   - nama: string (required)
+    //   - nomor: string (required)
+    //   - asalSekolah: string
+    //   - waktuDibuat: string
+    //   - waktuDiubah: string
+    //
+    // Collection: assessments
+    // Document ID: {idAssessment} (e.g. A0001)
+    // Fields:
+    //   - id: string (required)
+    //   - idPeserta: string (required)
+    //   - namaPeserta: string (required)
+    //   - nomorPeserta: string (required)
+    //   - tanggal: string (required)
+    //   - status: string (required, in ['DRAFT', 'SIAP_REVIEW', 'SUBMITTED'])
+    //   - data: map (assessment scores & notes)
+    //   - meta: map (sentra owners & statuses)
+    //   - rerata: map (sentra percentages)
+    //   - nilaiAkhir: number or null
+    //   - calistung: number or null
+    //   - kode: string or null
+    //   - kodeLabel: string or null
+    //   - logEdit: list of strings
+    //   - usernameAssessor: string
+    //   - waktuDibuat: string
+    //   - waktuDiubah: string
+    //   - waktuSubmit: string or null
+    //
+    // Collection: hasil
+    // Document ID: {idAssessment}
+    // Fields: denormalized report data exported upon final submit
+    //
+    // Collection: audit
+    // Document ID: auto-generated or timestamped
+    // Fields:
+    //   - waktu: string (required)
+    //   - oleh: string (required)
+    //   - aksi: string (required)
+    //   - target: string (required)
+    //   - detail: string
+    //
+    // ===============================================================
+
+    // Allow read and write for the internal SPMB application.
+    // In serverless client mode, the application manages multi-assessor collaboration.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if request.resource.data.sekolah is string;
+    }
+
+    match /users/{username} {
+      allow read: if true;
+      allow create, update: if request.resource.data.username is string &&
+                               request.resource.data.nama is string &&
+                               request.resource.data.pinHash is string &&
+                               request.resource.data.role in ['ADMIN', 'KOORDINATOR', 'ASSESSOR'];
+      allow delete: if true;
+    }
+
+    match /peserta/{idPeserta} {
+      allow read: if true;
+      allow create, update: if request.resource.data.nama is string &&
+                               request.resource.data.nomor is string;
+      allow delete: if true;
+    }
+
+    match /assessments/{idAssessment} {
+      allow read: if true;
+      allow create, update: if request.resource.data.idPeserta is string &&
+                               request.resource.data.namaPeserta is string &&
+                               request.resource.data.status in ['DRAFT', 'SIAP_REVIEW', 'SUBMITTED'];
+      allow delete: if true;
+    }
+
+    match /hasil/{idAssessment} {
+      allow read: if true;
+      allow create, update, delete: if true;
+    }
+
+    match /audit/{auditId} {
+      allow read: if true;
+      allow create: if request.resource.data.aksi is string &&
+                       request.resource.data.oleh is string;
+      allow update, delete: if false;
+    }
+  }
+}
+
