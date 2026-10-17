@@ -195,13 +195,23 @@
   <script src="/js/wizard.js"></script>
 
   <script>
-    document.addEventListener('DOMContentLoaded', function () {
-      App.init();
+    function startApp() {
+      if (window._appStarted) return;
+      window._appStarted = true;
+      if (typeof App !== 'undefined' && App.init) {
+        App.init();
+      }
       ['li-user', 'li-pin'].forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('keydown', function (e) { if (e.key === 'Enter') doLogin(); });
       });
-    });
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', startApp);
+    } else {
+      startApp();
+    }
   </script>
 </body>
 </html>

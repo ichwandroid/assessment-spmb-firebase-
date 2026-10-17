@@ -71,10 +71,10 @@ const Auth = {
 const state = { config: null, schema: null, peserta: [], riwayat: [], dashboard: null, users: [], reviewUsers: [], reviewUsersLoaded: false, view: null, rQuery: '', rFilter: 'ALL', rUser: 'ALL' };
 
 function api(fn, ...args) {
-  return window.api(fn, ...args);
+  return window.FirebaseAPI.call(fn, ...args);
 }
 function apiNoAuth(fn, ...args) {
-  return window.apiNoAuth(fn, ...args);
+  return window.FirebaseAPI.call(fn, ...args);
 }
 
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN / LOGOUT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */

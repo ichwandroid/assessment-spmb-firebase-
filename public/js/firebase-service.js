@@ -114,7 +114,7 @@ const FirebaseService = {
 
   // ════════════════ AUTENTIKASI ════════════════
   async getPublicBranding() {
-    await this.ensureInitialData();
+    this.ensureInitialData().catch(e => console.warn('Background init info:', e));
     let sekolah = APP_CONFIG.SEKOLAH;
     let tahunPelajaran = APP_CONFIG.TAHUN_PELAJARAN;
     try {
@@ -1033,34 +1033,24 @@ const FirebaseService = {
 };
 
 /*************************************************************
- * Jembatan API Window — Kompatibel 100% dengan frontend
- * Menggantikan google.script.run tanpa merusak JS_Core / JS_Wizard
+ * Jembatan API Window — Eksekusi layanan Firebase
  *************************************************************/
-window.api = function (fn, ...args) {
-  return new Promise((resolve, reject) => {
-    if (typeof FirebaseService[fn] === 'function') {
-      FirebaseService[fn](...args)
-        .then(res => resolve(res))
-        .catch(err => {
-          const m = (err && err.message) || String(err);
-          if (m === 'SESSION_EXPIRED' && typeof forceLogin === 'function') forceLogin();
-          reject(new Error(m));
-        });
-    } else {
-      reject(new Error(`Fungsi API '${fn}' tidak ditemukan di FirebaseService.`));
-    }
-  });
+window.FirebaseAPI = {
+  call(fn, ...args) {
+    return new Promise((resolve, reject) => {
+      if (typeof FirebaseService[fn] === 'function') {
+        FirebaseService[fn](...args)
+          .then(res => resolve(res))
+          .catch(err => {
+            const m = (err && err.message) || String(err);
+            if (m === 'SESSION_EXPIRED' && typeof forceLogin === 'function') forceLogin();
+            reject(new Error(m));
+          });
+      } else {
+        reject(new Error(`Fungsi API '${fn}' tidak ditemukan di FirebaseService.`));
+      }
+    });
+  }
 };
 
-window.apiNoAuth = function (fn, ...args) {
-  return new Promise((resolve, reject) => {
-    if (typeof FirebaseService[fn] === 'function') {
-      FirebaseService[fn](...args)
-        .then(res => resolve(res))
-        .catch(err => reject(new Error((err && err.message) || String(err))));
-    } else {
-      reject(new Error(`Fungsi API '${fn}' tidak ditemukan di FirebaseService.`));
-    }
-  });
-};
 
