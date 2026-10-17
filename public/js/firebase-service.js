@@ -234,24 +234,62 @@ const FirebaseService = {
 
   // ════════════════ DATA UMUM & PESERTA ════════════════
   async buildInitialData(user) {
-    const [cfgSnap, pesertaSnap, riwayat] = await Promise.all([
+    const [cfgSnap, pesertaSnap, riwayat, assessmentSnap] = await Promise.all([
       db.collection('config').doc('app').get(),
       db.collection('peserta').get(),
-      this.getRiwayat(user)
+      this.getRiwayat(user),
+      db.collection('assessments').get()
     ]);
 
-    let config = { ...APP_CONFIG };
+    let rawConfig = { ...APP_CONFIG };
     let schema = FORM_SCHEMA;
     if (cfgSnap.exists) {
       const cd = cfgSnap.data();
-      config = { ...config, ...cd };
+      rawConfig = { ...rawConfig, ...cd };
       if (cd.form_schema) schema = cd.form_schema;
     }
 
-    const asmMap = {};
-    riwayat.forEach(r => { asmMap[r.id_peserta] = r.id; });
+    // Restructure config to the format expected by app.js:
+    // app.js expects state.config.kode = { aMin, bMin, includeEnglish }
+    // app.js expects state.config.kodeList = [ { kode, label }, ... ]
+    const aMin = rawConfig.kode_a_min ?? rawConfig.KODE_A_MIN ?? 80;
+    const bMin = rawConfig.kode_b_min ?? rawConfig.KODE_B_MIN ?? 60;
+    const includeEnglish = String(rawConfig.kode_include_english ?? rawConfig.KODE_INCLUDE_ENGLISH ?? false).toUpperCase() === 'TRUE' || rawConfig.kode_include_english === true || rawConfig.KODE_INCLUDE_ENGLISH === true;
 
-    const peserta = pesertaSnap.docs.map(doc => {
+    const config = {
+      sekolah: rawConfig.sekolah || rawConfig.SEKOLAH || 'SD Anak Saleh',
+      tahunPelajaran: rawConfig.tahunPelajaran || rawConfig.TAHUN_PELAJARAN || '',
+      kode: {
+        aMin: aMin,
+        bMin: bMin,
+        includeEnglish: includeEnglish
+      },
+      kodeList: (schema && schema.kode) ? schema.kode : [
+        { kode: 'A', label: 'Lancar dalam aspek Calistung' },
+        { kode: 'B', label: 'Cukup dalam aspek Calistung' },
+        { kode: 'C', label: 'Butuh bimbingan dalam aspek Calistung' }
+      ]
+    };
+
+    const asmMap = {};
+    const countMap = {};
+    riwayat.forEach(r => {
+      asmMap[r.id_peserta] = r.id;
+      countMap[r.id_peserta] = (countMap[r.id_peserta] || 0) + 1;
+    });
+
+    const blockedPeserta = new Set();
+    if (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR') {
+      assessmentSnap.forEach(doc => {
+        const assessment = doc.data();
+        if (!this.canAccessAssessment(user, assessment)) {
+          const pesertaId = assessment.idPeserta || assessment.id_peserta;
+          if (pesertaId) blockedPeserta.add(pesertaId);
+        }
+      });
+    }
+
+    const peserta = pesertaSnap.docs.filter(doc => !blockedPeserta.has(doc.id)).map(doc => {
       const d = doc.data();
       return {
         id_peserta: d.id,
@@ -259,7 +297,8 @@ const FirebaseService = {
         nomor_peserta: d.nomor,
         asal_tk: d.asalSekolah || d.asal_tk || '',
         waktu_dibuat: d.waktuDibuat || '',
-        id_assessment: asmMap[d.id] || null
+        id_assessment: asmMap[d.id] || null,
+        jumlah_assessment: countMap[d.id] || 0
       };
     });
 
@@ -281,6 +320,8 @@ const FirebaseService = {
   },
 
   async getPeserta(query) {
+    const user = this.getCurrentUser();
+    if (!user) throw new Error('SESSION_EXPIRED');
     const [snap, asmSnap] = await Promise.all([
       db.collection('peserta').get(),
       db.collection('assessments').get()
@@ -296,7 +337,18 @@ const FirebaseService = {
       }
     });
 
-    let list = snap.docs.map(d => {
+    const blockedPeserta = new Set();
+    if (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR') {
+      asmSnap.forEach(doc => {
+        const assessment = doc.data();
+        if (!this.canAccessAssessment(user, assessment)) {
+          const pesertaId = assessment.idPeserta || assessment.id_peserta;
+          if (pesertaId) blockedPeserta.add(pesertaId);
+        }
+      });
+    }
+
+    let list = snap.docs.filter(d => !blockedPeserta.has(d.id)).map(d => {
       const data = d.data();
       return {
         id_peserta: data.id,
@@ -441,44 +493,89 @@ const FirebaseService = {
   // ════════════════ ASSESSMENT (PENILAIAN) ════════════════
   canAccessAssessment(user, assessment) {
     if (user.role === 'ADMIN' || user.role === 'KOORDINATOR') return true;
-    if (assessment.usernameAssessor && assessment.usernameAssessor.toLowerCase() === user.username.toLowerCase()) return true;
     const asg = user.assignments || [];
-    if (asg.length === 0) return true;
     const meta = assessment.meta || {};
     const sentras = meta.sentra || {};
-    return Object.keys(sentras).some(sid => {
-      const st = sentras[sid] || {};
-      const assigned = asg.includes(sid);
-      const owned = st.owner && st.owner.toLowerCase() === user.username.toLowerCase();
-      return assigned || owned;
+    // Assessment hanya terlihat jika pengguna masih memiliki sentra yang
+    // belum diklaim atau sudah diklaim olehnya.
+    return FORM_SCHEMA.sentra.some(s => {
+      const st = sentras[s.id] || {};
+      const assigned = asg.length === 0 || asg.includes(s.id);
+      return assigned && (!st.owner || st.owner.toLowerCase() === user.username.toLowerCase());
     });
   },
 
   async getRiwayat(user) {
     const snap = await db.collection('assessments').get();
     const list = [];
+    const asg = user.assignments || [];
+    const isStaff = user.role === 'ADMIN' || user.role === 'KOORDINATOR';
+
     snap.forEach(doc => {
       const d = doc.data();
-      if (this.canAccessAssessment(user, d)) {
-        list.push({
-          id: d.id,
-          id_peserta: d.idPeserta || d.id_peserta,
-          nama_peserta: d.namaPeserta || d.nama_peserta,
-          nomor_peserta: d.nomorPeserta || d.nomor_peserta,
-          assessor: d.assessor || d.usernameAssessor,
-          username_assessor: d.usernameAssessor,
-          tanggal: d.tanggal,
-          status: d.status,
-          rerata: d.rerata || {},
-          nilai_akhir: d.nilaiAkhir,
-          calistung: d.calistung,
-          kode: d.kode,
-          kode_label: d.kodeLabel,
-          waktu_submit: d.waktuSubmit,
-          waktu_diubah: d.waktuDiubah,
-          meta: d.meta || defaultMeta_()
-        });
-      }
+      if (!this.canAccessAssessment(user, d)) return;
+
+      const meta = d.meta || defaultMeta_();
+      const sentras = meta.sentra || {};
+
+      // Build sentraStatus: { [sid]: 'DRAFT'|'FINAL' }
+      const sentraStatus = {};
+      // Build sentraOwner: { [sid]: { owner, ownerName } }
+      const sentraOwner = {};
+      // myPending: sentras that this user is assigned to and not yet FINAL
+      const myPending = [];
+      // handledByOther: sentras claimed by another user (not me, not empty)
+      const handledByOther = [];
+
+      FORM_SCHEMA.sentra.forEach(s => {
+        const st = sentras[s.id] || {};
+        sentraStatus[s.id] = st.status || 'DRAFT';
+        sentraOwner[s.id] = { owner: st.owner || '', ownerName: st.ownerName || '' };
+
+        if (!isStaff) {
+          const isAssigned = asg.length === 0 || asg.includes(s.id);
+          if (isAssigned && st.status !== 'FINAL') {
+            const claimedByOther = st.owner && st.owner.toLowerCase() !== user.username.toLowerCase();
+            if (claimedByOther) {
+              handledByOther.push({ sid: s.id, ownerName: st.ownerName || st.owner });
+            } else {
+              // Either unclaimed or claimed by this user
+              myPending.push(s.id);
+            }
+          }
+        }
+      });
+
+      list.push({
+        id: d.id,
+        id_peserta: d.idPeserta || d.id_peserta,
+        // Alias fields used by riwayatCard in app.js
+        nama: d.namaPeserta || d.nama_peserta || '',
+        nomor: d.nomorPeserta || d.nomor_peserta || '',
+        creator: d.assessor || d.usernameAssessor || '',
+        creatorUsername: d.usernameAssessor || '',
+        updated: d.waktuDiubah || '',
+        // Legacy / extra fields
+        nama_peserta: d.namaPeserta || d.nama_peserta,
+        nomor_peserta: d.nomorPeserta || d.nomor_peserta,
+        assessor: d.assessor || d.usernameAssessor,
+        username_assessor: d.usernameAssessor,
+        tanggal: d.tanggal,
+        status: d.status,
+        rerata: d.rerata || {},
+        nilai_akhir: d.nilaiAkhir,
+        calistung: d.calistung,
+        kode: d.kode,
+        kode_label: d.kodeLabel,
+        waktu_submit: d.waktuSubmit,
+        waktu_diubah: d.waktuDiubah,
+        meta,
+        // Per-user context fields consumed by riwayatCard
+        sentraStatus,
+        sentraOwner,
+        myPending: isStaff ? [] : myPending,
+        handledByOther: isStaff ? [] : handledByOther
+      });
     });
 
     list.sort((a, b) => String(b.waktu_diubah || '').localeCompare(String(a.waktu_diubah || '')));
@@ -497,14 +594,21 @@ const FirebaseService = {
       throw new Error('Akses ditolak — assessment ini bukan milik Anda.');
     }
 
+    const hasil = hitungHasil_(d.data || {});
+
     return {
       ok: true,
       assessment: {
         id: d.id,
         id_peserta: d.idPeserta || d.id_peserta,
         nama_peserta: d.namaPeserta || d.nama_peserta,
+        nama: d.namaPeserta || d.nama_peserta,
         nomor_peserta: d.nomorPeserta || d.nomor_peserta,
+        nomor: d.nomorPeserta || d.nomor_peserta,
+        asal_tk: d.asalTk || '',
         assessor: d.assessor || d.usernameAssessor,
+        creator: d.assessor || d.usernameAssessor,
+        creatorUsername: d.usernameAssessor || '',
         username_assessor: d.usernameAssessor,
         tanggal: d.tanggal,
         status: d.status,
@@ -515,11 +619,13 @@ const FirebaseService = {
         calistung: d.calistung,
         kode: d.kode,
         kode_label: d.kodeLabel,
+        koordinator: d.meta && d.meta.koordinator ? d.meta.koordinator.nama : '',
         waktu_dibuat: d.waktuDibuat,
         waktu_diubah: d.waktuDiubah,
         waktu_submit: d.waktuSubmit,
         log_edit: d.logEdit || []
-      }
+      },
+      hasil: hasil
     };
   },
 
@@ -579,6 +685,10 @@ const FirebaseService = {
         storedData = cur.data || {};
         meta = sanitizeMeta_(cur.meta);
         logEdit = cur.logEdit || [];
+      } else if (snap.exists) {
+        // ID dibuat di klien; dua guru dapat memilih ID berikutnya bersamaan.
+        // Jangan izinkan transaksi kedua menimpa assessment yang sudah ada.
+        throw new Error(`ASSESSMENT_EXISTS:${snap.id}|Peserta ini sudah memiliki assessment ${snap.id}.`);
       }
 
       // Deep merge per sentra dengan aturan ownership
@@ -606,6 +716,14 @@ const FirebaseService = {
             st.ownerName = user.nama;
           }
         } else {
+          const attempted = sanitizeSentraPartial_(s, incoming);
+          const storedPart = sentraPartFromData_(s, storedData);
+          // Tab yang stale tidak boleh menimpa nilai sentra yang baru saja
+          // diklaim guru lain. Payload dengan data identik tetap aman untuk
+          // autosave karena tidak mengubah data yang tersimpan.
+          if (JSON.stringify(attempted) !== JSON.stringify(storedPart)) {
+            throw new Error(`HANDLED_BY_OTHER:Sentra ${s.nama} sudah diklaim oleh ${st.ownerName || st.owner}.`);
+          }
           part = sentraPartFromData_(s, storedData);
         }
 
@@ -711,7 +829,7 @@ const FirebaseService = {
         waktuDiubah: this.nowStr()
       });
 
-      return { ok: true, status: newStatus, meta };
+      return { ok: true, status: newStatus, meta, assessment: { data: { meta } } };
     });
   },
 
@@ -740,7 +858,7 @@ const FirebaseService = {
         waktuDiubah: this.nowStr()
       });
 
-      return { ok: true, status: 'DRAFT', meta };
+      return { ok: true, status: 'DRAFT', meta, assessment: { data: { meta } } };
     });
   },
 
@@ -768,7 +886,7 @@ const FirebaseService = {
         waktuDiubah: this.nowStr()
       });
 
-      return { ok: true, meta };
+      return { ok: true, meta, assessment: { data: { meta } } };
     });
   },
 
@@ -826,7 +944,7 @@ const FirebaseService = {
         rerata: asm.rerata || {}
       });
 
-      return { ok: true, status: 'SUBMITTED' };
+      return { ok: true, status: 'SUBMITTED', assessment: { data: { meta } }, hasil: { nilaiAkhir: asm.nilaiAkhir, calistung: asm.calistung, kode: asm.kode, kodeLabel: asm.kodeLabel, sentra: asm.rerata || {} } };
     });
   },
 
@@ -946,9 +1064,77 @@ const FirebaseService = {
       belum_final: pendingSentra[s.id] || 0
     }));
 
+    // Build readyList (SIAP_REVIEW), draftList (DRAFT), recent (all sorted)
+    const readyList = [];
+    const draftList = [];
+    const recent = [];
+
+    asmList.forEach(a => {
+      const entry = {
+        id: a.id,
+        nama: a.namaPeserta || a.nama_peserta || '',
+        nomor: a.nomorPeserta || a.nomor_peserta || '',
+        creator: a.assessor || a.usernameAssessor || '',
+        tanggal: a.tanggal || '',
+        status: a.status,
+        kode: a.kode || null,
+        waktu_diubah: a.waktuDiubah || ''
+      };
+      if (a.status === 'SIAP_REVIEW') {
+        readyList.push(entry);
+      }
+      if (a.status === 'DRAFT') {
+        const sentraStatus = {};
+        const meta = a.meta || {};
+        const sentras = meta.sentra || {};
+        FORM_SCHEMA.sentra.forEach(s => {
+          sentraStatus[s.id] = sentras[s.id] ? sentras[s.id].status : 'DRAFT';
+        });
+        draftList.push({ ...entry, sentraStatus });
+      }
+      recent.push(entry);
+    });
+
+    // Sort recent by waktu_diubah desc, cap at 10
+    recent.sort((a, b) => String(b.waktu_diubah).localeCompare(String(a.waktu_diubah)));
+    const recentCapped = recent.slice(0, 10);
+
+    // Build pendingBySentra as object keyed by sentra id
+    const pendingBySentra = {};
+    FORM_SCHEMA.sentra.forEach(s => {
+      pendingBySentra[s.id] = {
+        count: pendingSentra[s.id] || 0,
+        assessor: s.singkat || s.nama
+      };
+    });
+
+    // Calculate average nilai_akhir for SUBMITTED
+    const submittedValues = asmList
+      .filter(a => a.status === 'SUBMITTED' && a.nilaiAkhir != null)
+      .map(a => a.nilaiAkhir);
+    const rerata = submittedValues.length
+      ? Math.round(submittedValues.reduce((a, b) => a + b, 0) / submittedValues.length * 10) / 10
+      : null;
+
     return {
       ok: true,
       dashboard: {
+        // Fields for stat cards
+        peserta: totalPeserta,
+        draft: countStatus.DRAFT,
+        siapReview: countStatus.SIAP_REVIEW,
+        submitted: countStatus.SUBMITTED,
+        // Kode distribution
+        kodeCount: countKode,
+        // Pending by sentra as object
+        pendingBySentra,
+        // Lists for dashboard cards
+        readyList,
+        draftList,
+        recent: recentCapped,
+        // Average
+        rerata,
+        // Legacy fields (backwards compat)
         total_peserta: totalPeserta,
         status: countStatus,
         kode: countKode,
@@ -1201,5 +1387,3 @@ window.FirebaseAPI = {
     });
   }
 };
-
-

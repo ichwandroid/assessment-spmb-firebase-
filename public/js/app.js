@@ -1,12 +1,12 @@
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HELPER DASAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ HELPER DASAR ════════════════ */
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const G = () => window.gsap || null;
 const round1 = v => Math.round(v * 10) / 10;
 const num = v => { const n = parseInt(v, 10); return (n >= 1 && n <= 3) ? n : 0; };
 
-const BULAN = ['Januari','Februari','Maret','April','Mei','Juni','Juli','Agustus','September','Oktober','November','Desember'];
+const BULAN = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 function fmtTanggal(s) {
   if (!s) return '-';
   const m = String(s).match(/^(\d{4})-(\d{2})-(\d{2})$/);
@@ -21,7 +21,7 @@ function inisial(nama) {
   return String(nama || '?').trim().split(/\s+/).slice(0, 2).map(x => (x[0] || '')).join('').toUpperCase() || '?';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• IKON â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ IKON ════════════════ */
 const ICONS = {
   home: '<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>',
   x: '<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
@@ -60,11 +60,11 @@ const ROLE_INFO = {
   ASSESSOR: ['Assessor', 'bg-teal-100 text-teal-700']
 };
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• AUTH & API â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ AUTH & API ════════════════ */
 const Auth = {
   token: null, user: null,
-  save(t) { this.token = t; try { localStorage.setItem('ppdb_token', t); } catch (e) {} },
-  clear() { this.token = null; this.user = null; try { localStorage.removeItem('ppdb_token'); } catch (e) {} },
+  save(t) { this.token = t; try { localStorage.setItem('ppdb_token', t); } catch (e) { } },
+  clear() { this.token = null; this.user = null; try { localStorage.removeItem('ppdb_token'); } catch (e) { } },
   isAdmin() { return !!(this.user && this.user.role === 'ADMIN'); },
   isKoord() { return !!(this.user && this.user.role === 'KOORDINATOR'); },
   isStaff() { return !!(this.user && (this.user.role === 'ADMIN' || this.user.role === 'KOORDINATOR')); },
@@ -87,7 +87,7 @@ function apiNoAuth(fn, ...args) {
   return window.FirebaseAPI.call(fn, ...args);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• LOGIN / LOGOUT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ LOGIN / LOGOUT ════════════════ */
 /* Akun dengan PIN default tidak boleh menulis apa pun (ditegakkan server lewat
  * requireWrite_). Sampai PIN diganti, aplikasi menahan semua aksi tulis. */
 function pinPending() { return !!(Auth.user && Auth.user.pinHarusDiganti); }
@@ -105,7 +105,7 @@ function showLogin(note) {
 }
 function forceLogin() {
   Auth.clear();
-  try { if (typeof autosaveTimer !== 'undefined' && autosaveTimer) clearTimeout(autosaveTimer); } catch (e) {}
+  try { if (typeof autosaveTimer !== 'undefined' && autosaveTimer) clearTimeout(autosaveTimer); } catch (e) { }
   if (typeof WZ !== 'undefined') WZ = null;
   document.body.classList.remove('in-wizard');
   const app = $('#app'); if (app) app.classList.add('hidden');
@@ -136,7 +136,7 @@ async function doLogin() {
 async function doLogout() {
   const ok = await confirmModal({ title: 'Keluar?', html: '<p class="text-sm">Tutup sesi Anda sekarang?</p>', confirmText: 'Keluar' });
   if (!ok) return;
-  try { await api('logout'); } catch (e) {}
+  try { await api('logout'); } catch (e) { }
   forceLogin();
   toast('Anda telah keluar.', 'info');
 }
@@ -201,7 +201,7 @@ async function loadDashboardData_() {
   catch (e) { return state.dashboard; }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• TOAST & MODAL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ TOAST & MODAL ════════════════ */
 function toast(msg, type, dur) {
   const colors = { success: 'bg-emerald-500', error: 'bg-rose-500', info: 'bg-slate-800' };
   const icons = { success: 'check', error: 'alert', info: 'info' };
@@ -220,14 +220,14 @@ function modalOpen(inner, o) {
   o = o || {};
   const root = $('#modal-root');
   lastFocusBeforeModal = document.activeElement;
-  root.innerHTML = '<div class="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-4">' +
-    '<div class="modal-card bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto" role="dialog" aria-modal="true">' + inner + '</div></div>';
+  root.innerHTML = '<div class="fixed inset-0 z-[60] bg-slate-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 sm:p-4">' +
+    '<div class="modal-card bg-white w-full max-w-md rounded-3xl p-6 shadow-2xl max-h-[90vh] overflow-y-auto ' + (o.cardClass || '') + '" role="dialog" aria-modal="true">' + inner + '</div></div>';
   const ov = root.firstElementChild;
   if (o.pinned) root.dataset.pinned = '1'; else delete root.dataset.pinned;
   ov.addEventListener('click', e => { if (e.target === ov) modalClose(); });
   /* Fokuskan elemen pertama agar keyboard & pembaca layar masuk ke dialog */
   const first = ov.querySelector('input:not([disabled]), select, textarea, button');
-  if (first) { try { first.focus(); } catch (e) {} }
+  if (first) { try { first.focus(); } catch (e) { } }
   if (G()) {
     gsap.fromTo(ov, { opacity: 0 }, { opacity: 1, duration: .18 });
     gsap.fromTo(ov.querySelector('.modal-card'), { y: 26, scale: .97, opacity: 0 }, { y: 0, scale: 1, opacity: 1, duration: .3, ease: 'power3.out' });
@@ -241,7 +241,7 @@ function modalClose() {
   const back = lastFocusBeforeModal;
   if (G() && root.firstElementChild) gsap.to(root.firstElementChild, { opacity: 0, duration: .15, onComplete: () => root.innerHTML = '' });
   else root.innerHTML = '';
-  if (back && typeof back.focus === 'function') { try { back.focus(); } catch (e) {} }
+  if (back && typeof back.focus === 'function') { try { back.focus(); } catch (e) { } }
 }
 /* Esc menutup modal  sebelumnya hanya klik area gelap. */
 document.addEventListener('keydown', e => {
@@ -253,7 +253,7 @@ document.addEventListener('keydown', e => {
   modalClose();
 });
 
-/* â”€â”€ Gate wajib ganti PIN â”€â”€
+/* ── Gate wajib ganti PIN ──
  * Server menolak semua endpoint tulis (requireWrite_) selama PIN default belum
  * diganti; modal ini adalah jalur keluarnya. */
 function showPinGate() {
@@ -297,7 +297,7 @@ async function submitPinChange(ov) {
     delete $('#modal-root').dataset.pinned;
     modalClose();
     applyRoleNav();
-    toast('PIN berhasil diganti. Aplikasi siap dipakai ðŸŽ‰', 'success');
+    toast('PIN berhasil diganti. Aplikasi siap dipakai 🎉', 'success');
   } catch (e) {
     setBtnLoading(btn, false);
     note.textContent = e.message;
@@ -325,7 +325,7 @@ function setBtnLoading(btn, on, label) {
   else { btn.disabled = false; if (btn.dataset.orig) btn.innerHTML = btn.dataset.orig; }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• NAVIGASI â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ NAVIGASI ════════════════ */
 function setView(html) { $('#view').innerHTML = html; animateIn(); }
 function animateIn() {
   if (G()) gsap.fromTo('#view .anim-in', { opacity: 0, y: 14 }, { opacity: 1, y: 0, duration: .35, stagger: .05, ease: 'power2.out', clearProps: 'all' });
@@ -351,7 +351,7 @@ function showHasilById(id) {
   goView('hasil', id);
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• KALKULASI (mirror Calculation.gs) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ KALKULASI (mirror Calculation.gs) ════════════════ */
 function defaultMeta() {
   const m = { sentra: {}, koordinator: { username: '', nama: '', waktu: '' } };
   state.schema.sentra.forEach(s => m.sentra[s.id] = { status: 'DRAFT', assessor: '', waktu: '', owner: '', ownerName: '' });
@@ -447,7 +447,7 @@ function barColor(r) {
 }
 function kodeRuleText() {
   const k = state.config.kode;
-  return 'Dihitung dari rerata Calistung (2.1 Membaca, 2.2 Menulis/Dikte, 2.3 Berhitung' + (k.includeEnglish ? ', 2.4 English' : '') + ')  A â‰¥ ' + k.aMin + ' | B â‰¥ ' + k.bMin + ' | C < ' + k.bMin;
+  return 'Dihitung dari rerata Calistung (2.1 Membaca, 2.2 Menulis/Dikte, 2.3 Berhitung' + (k.includeEnglish ? ', 2.4 English' : '') + ')  A ≥ ' + k.aMin + ' | B ≥ ' + k.bMin + ' | C < ' + k.bMin;
 }
 function statusBadge(st) {
   if (st === 'SUBMITTED') return '<span class="badge bg-emerald-50 text-emerald-600">' + ic('check', 'w-3.5 h-3.5') + ' Selesai</span>';
@@ -471,7 +471,7 @@ function errorHtml(msg) {
   return '<div class="card p-6 text-center text-rose-500 anim-in">' + ic('alert', 'w-8 h-8 mx-auto') + '<p class="mt-2 font-bold text-sm">' + esc(msg) + '</p></div>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: DASHBOARD (KOORDINATOR & ADMIN) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ VIEW: DASHBOARD (KOORDINATOR & ADMIN) ════════════════ */
 /* Data dashboard dimuat on-demand dan dirender ulang saat tiba. Dipanggil
  * setiap kali dashboard dibuka (enterApp/refreshData/getDashboardDataImpl_
  * tidak lagi ikut bootstrap getInitialData). */
@@ -536,7 +536,7 @@ function renderDashboard() {
     '<div class="card p-4 sm:p-5 anim-in mt-4">' +
     '<div class="flex items-center justify-between gap-3 flex-wrap">' +
     '<h3 class="font-extrabold text-sm sm:text-base text-slate-800 flex items-center gap-2 leading-snug">' + ic('clock', 'w-5 h-5 text-teal-500 shrink-0') + ' Aktivitas Terbaru</h3>' +
-    '<button class="text-xs font-extrabold text-teal-600 hover:underline shrink-0 !px-2.5 !py-1.5 -mr-1 rounded-lg hover:bg-teal-50 transition" onclick="goView(\'riwayat\')">Lihat semua â†’</button>' +
+    '<button class="text-xs font-extrabold text-teal-600 hover:underline shrink-0 !px-2.5 !py-1.5 -mr-1 rounded-lg hover:bg-teal-50 transition" onclick="goView(\'riwayat\')">Lihat semua →</button>' +
     '</div>' +
     '<div class="grid gap-2.5 mt-4">' + recentHtml() + '</div></div>'
   );
@@ -615,7 +615,7 @@ function recentHtml() {
     '</button>').join('');
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: RIWAYAT / PENILAIAN â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ VIEW: RIWAYAT / PENILAIAN ════════════════ */
 function showRiwayat() {
   const staff = Auth.isStaff();
   setView(
@@ -639,7 +639,7 @@ function showRiwayat() {
       state.reviewUsers = res.users || [];
       state.reviewUsersLoaded = true;
       if (state.view === 'riwayat') showRiwayat();
-    }).catch(() => {});
+    }).catch(() => { });
   }
   $$('#view [data-rf]').forEach(b => b.addEventListener('click', () => {
     state.rFilter = b.dataset.rf;
@@ -685,7 +685,7 @@ function riwayatCard(it) {
     '</div></div>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: PENGGUNA (ADMIN) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ VIEW: PENGGUNA (ADMIN) ════════════════ */
 async function showPengguna() {
   if (!Auth.isAdmin()) { goView('riwayat'); return; }
   setView(spinnerHtml('Memuat daftar pengguna...'));
@@ -733,7 +733,7 @@ function userCard(u) {
     '</div></div>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: KELOLA SOAL ASSESSMENT (ADMIN) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ VIEW: KELOLA SOAL ASSESSMENT (ADMIN) ════════════════ */
 async function showSoal() {
   if (!Auth.isAdmin()) { goView('riwayat'); return; }
   setView(spinnerHtml('Memuat daftar soal...'));
@@ -748,7 +748,7 @@ function renderSoal() {
   const groups = state.schema.sentra.map(s =>
     '<section class="card p-4 sm:p-5"><div class="mb-3"><p class="text-[11px] font-extrabold uppercase tracking-widest text-teal-600">' + esc(s.bab) + '</p><h3 class="font-extrabold text-slate-800">' + esc(s.nama) + '</h3></div>' +
     s.materi.map(m => '<div class="border-t border-slate-100 py-3"><div class="flex justify-between gap-2 items-start"><div><p class="text-xs font-bold text-slate-500">' + esc(m.no) + '</p><p class="font-bold text-sm text-slate-800">' + esc(m.nama) + '</p></div><div class="flex gap-2 shrink-0"><button class="btn-soft !py-1.5 !px-2.5 !text-xs" data-act="rubric-edit" data-sid="' + esc(s.id) + '" data-mid="' + esc(m.id) + '">' + ic('edit', 'w-3.5 h-3.5') + ' Rubrik</button><button class="btn-soft !py-1.5 !px-2.5 !text-xs" data-act="question-add" data-sid="' + esc(s.id) + '" data-mid="' + esc(m.id) + '">' + ic('plus', 'w-3.5 h-3.5') + ' Soal</button></div></div>' +
-    '<div class="mt-2 grid gap-2">' + m.items.map(it => '<div class="rounded-xl bg-slate-50 px-3 py-2.5 flex items-center gap-2"><span class="text-sm text-slate-700 flex-1">' + esc(it.nama) + '</span><button class="btn-soft !py-1 !px-2 !text-xs" data-act="question-edit" data-sid="' + esc(s.id) + '" data-mid="' + esc(m.id) + '" data-iid="' + esc(it.id) + '">' + ic('edit', 'w-3.5 h-3.5') + ' Edit</button><button class="btn-soft !py-1 !px-2 !text-xs !bg-rose-50 !text-rose-600" data-act="question-delete" data-sid="' + esc(s.id) + '" data-mid="' + esc(m.id) + '" data-iid="' + esc(it.id) + '" title="Hapus soal">' + ic('trash', 'w-3.5 h-3.5') + '</button></div>').join('') + '</div></div>').join('') + '</section>'
+      '<div class="mt-2 grid gap-2">' + m.items.map(it => '<div class="rounded-xl bg-slate-50 px-3 py-2.5 flex items-center gap-2"><span class="text-sm text-slate-700 flex-1">' + esc(it.nama) + '</span><button class="btn-soft !py-1 !px-2 !text-xs" data-act="question-edit" data-sid="' + esc(s.id) + '" data-mid="' + esc(m.id) + '" data-iid="' + esc(it.id) + '">' + ic('edit', 'w-3.5 h-3.5') + ' Edit</button><button class="btn-soft !py-1 !px-2 !text-xs !bg-rose-50 !text-rose-600" data-act="question-delete" data-sid="' + esc(s.id) + '" data-mid="' + esc(m.id) + '" data-iid="' + esc(it.id) + '" title="Hapus soal">' + ic('trash', 'w-3.5 h-3.5') + '</button></div>').join('') + '</div></div>').join('') + '</section>'
   ).join('');
   setView('<div class="anim-in"><div class="mb-4"><h2 class="text-xl font-extrabold text-slate-800">Soal Assessment</h2><p class="text-sm text-slate-500 mt-0.5">Tambah, ubah, atau hapus pertanyaan pada setiap materi.</p></div><div class="grid gap-4">' + groups + '</div><p class="text-[11px] text-slate-400 mt-4">Perubahan berlaku untuk assessment baru dan draft yang dibuka setelah perubahan. Assessment yang sudah tersimpan mempertahankan skor historisnya.</p></div>');
 }
@@ -794,7 +794,7 @@ function rubricModal(sid, mid) {
     const btn = ov.querySelector('#rf-save'); setBtnLoading(btn, true, 'Menyimpan...');
     try {
       const rubrikAspek = {};
-      criteria.forEach((c, ci) => { rubrikAspek[c.key] = {}; ['3', '2', '1'].forEach(score => { rubrikAspek[c.key][score] = ov.querySelector('#rf-a-' + ci + '-' + score).value.trim(); }); });
+      criteria.forEach((c, ci) => { rubrikAspek[c.key] = {};['3', '2', '1'].forEach(score => { rubrikAspek[c.key][score] = ov.querySelector('#rf-a-' + ci + '-' + score).value.trim(); }); });
       const res = await api('saveAssessmentRubric', { sentraId: sid, materiId: mid, labelNilai: labelNilai, rubrikNilai: rubrikNilai, rubrikAspek: rubrikAspek, pedoman: ov.querySelector('#rf-pedoman').value.split(/\r?\n/).map(x => x.trim()).filter(Boolean) });
       state.schema = res.schema; modalClose(); toast('Rubrik diperbarui.', 'success'); renderSoal();
     } catch (e) { setBtnLoading(btn, false); toast(e.message, 'error'); }
@@ -1435,7 +1435,7 @@ async function hapusPeserta(id) {
   }
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: HASIL DETAIL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ VIEW: HASIL DETAIL ════════════════ */
 async function showHasil(id) {
   setView(spinnerHtml('Memuat hasil assessment…'));
   let res;
@@ -1484,8 +1484,8 @@ async function showHasil(id) {
       '<h3 class="font-extrabold text-slate-800">' + s.bab + '  ' + esc(s.nama) + '</h3>' +
       '<div class="flex items-center gap-2 flex-wrap">' +
       '<span class="badge ' + (st.status === 'FINAL' ? 'bg-emerald-50 text-emerald-600' : (ownTxt ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-400')) + '">' +
-      (st.status === 'FINAL' ? 'âœ“ ' + esc(st.assessor) : (ownTxt ? ic('lock', 'w-3 h-3') + ' ' + esc(ownTxt) : 'Belum diklaim')) + '</span>' +
-      '<span class="badge ' + (h.sentra[s.id] != null ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-400') + '">Rerata: ' + (h.sentra[s.id] != null ? h.sentra[s.id] : 'â€“') + '</span>' +
+      (st.status === 'FINAL' ? '✓ ' + esc(st.assessor) : (ownTxt ? ic('lock', 'w-3 h-3') + ' ' + esc(ownTxt) : 'Belum diklaim')) + '</span>' +
+      '<span class="badge ' + (h.sentra[s.id] != null ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-400') + '">Rerata: ' + (h.sentra[s.id] != null ? h.sentra[s.id] : '–') + '</span>' +
       (staff && a.status !== 'SUBMITTED' && st.status === 'FINAL' ? '<button class="btn-soft !px-3 !py-1.5 !text-xs" data-act="retract" data-id="' + esc(a.id) + '" data-sid="' + s.id + '">Tarik</button>' : '') +
       (staff && a.status !== 'SUBMITTED' && st.owner ? '<button class="btn-soft !px-3 !py-1.5 !text-xs" data-act="release" data-id="' + esc(a.id) + '" data-sid="' + s.id + '" title="Bebaskan agar assessor lain bisa mengambil alih">Lepaskan</button>' : '') +
       '</div></div>' +
@@ -1503,7 +1503,7 @@ async function showHasil(id) {
 
   setView(html);
 }
-function valChip(v) { return '<span class="val-chip v' + (v || 0) + '">' + (v || 'â€“') + '</span>'; }
+function valChip(v) { return '<span class="val-chip v' + (v || 0) + '">' + (v || '–') + '</span>'; }
 function detailMateri(m, d, r) {
   const skor = d.skor || {};
   const itemsHtml = m.items.map(it => {
@@ -1536,11 +1536,11 @@ function bab4Card(h, a) {
     '<thead><tr class="text-left text-[11px] uppercase text-slate-400"><th class="pb-2">No</th><th class="pb-2">Materi</th><th class="pb-2 text-right">Rerata</th><th class="pb-2 pl-4">Informasi Tambahan</th></tr></thead>' +
     '<tbody class="divide-y divide-slate-100">' +
     rows.map(r => '<tr><td class="py-2.5 font-bold text-slate-400">' + r[0] + '</td><td class="py-2.5 font-bold">' + r[1] + '</td>' +
-      '<td class="py-2.5 text-right font-extrabold ' + (r[2] == null ? 'text-slate-300' : 'text-teal-700') + '">' + (r[2] == null ? 'â€“' : r[2]) + '</td>' +
+      '<td class="py-2.5 text-right font-extrabold ' + (r[2] == null ? 'text-slate-300' : 'text-teal-700') + '">' + (r[2] == null ? '–' : r[2]) + '</td>' +
       '<td class="py-2.5 pl-4 text-slate-500 text-xs">' + esc(r[3] || '-') + '</td></tr>').join('') +
     '<tr class="bg-slate-50/70"><td></td><td class="py-3 font-extrabold">Rerata Umum (Nilai Akhir)</td>' +
-    '<td class="py-3 text-right font-extrabold text-teal-700">' + (h.nilaiAkhir == null ? 'â€“' : h.nilaiAkhir) + '</td>' +
-    '<td class="py-3 pl-4 text-xs text-slate-400">Calistung: ' + (h.calistung == null ? 'â€“' : h.calistung) + '</td></tr>' +
+    '<td class="py-3 text-right font-extrabold text-teal-700">' + (h.nilaiAkhir == null ? '–' : h.nilaiAkhir) + '</td>' +
+    '<td class="py-3 pl-4 text-xs text-slate-400">Calistung: ' + (h.calistung == null ? '–' : h.calistung) + '</td></tr>' +
     '</tbody></table></div>' +
     '<div class="mt-4 p-4 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-100 flex items-center gap-4 flex-wrap">' +
     '<div class="flex-1 min-w-[200px]"><p class="text-[11px] font-extrabold uppercase tracking-wider text-teal-700">Kode Hasil Asesmen</p>' +
@@ -1551,9 +1551,9 @@ function bab4Card(h, a) {
     '</div>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• CETAK â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ CETAK ════════════════ */
 /* Cache satu assessment terakhir: showHasil sudah mengambil objek yang sama,
- * jadi tombol Cetak tidak perlu round-trip Apps Script kedua (1â€“3 detik). */
+ * jadi tombol Cetak tidak perlu round-trip Apps Script kedua (1–3 detik). */
 let hasilCache = null;
 async function printAssessmentById(id) {
   if (hasilCache && hasilCache.assessment && String(hasilCache.assessment.id) === String(id)) {
@@ -1571,23 +1571,23 @@ function openPrintWindow(html) {
   if (!w) { toast('Popup diblokir browser. Izinkan popup untuk mencetak.', 'error'); return; }
   w.document.open(); w.document.write(html); w.document.close();
   w.focus();
-  setTimeout(() => { try { w.print(); } catch (e) {} }, 700);
+  setTimeout(() => { try { w.print(); } catch (e) { } }, 700);
 }
 
 const PRINT_CSS = '@page{size:A4;margin:13mm 12mm}*{box-sizing:border-box}body{font-family:Roboto,"Segoe UI",Arial,sans-serif;color:#1e293b;font-size:10.5pt;margin:0}' +
-'.doc-head{text-align:center;border-bottom:3px double #0f766e;padding-bottom:10px;margin-bottom:12px}' +
-'.doc-head h1{font-size:12pt;margin:0;letter-spacing:.5px}.doc-head h2{font-size:15pt;margin:2px 0;color:#0f766e}' +
-'.doc-head h3{font-size:10.5pt;margin:2px 0 8px;font-weight:700}' +
-'table.ident{width:100%;border-collapse:collapse;margin-top:6px;font-size:9.5pt}table.ident td{border:none;padding:1.5px 4px;text-align:left}' +
-'.bab{margin-top:14px}.bab-title{background:#0f766e;color:#fff;font-weight:800;font-size:10.5pt;padding:5px 10px;border-radius:6px 6px 0 0}' +
-'.materi{margin-top:10px;page-break-inside:avoid}.materi h3{font-size:10.5pt;margin:0 0 5px}' +
-'table{width:100%;border-collapse:collapse;font-size:9.5pt}th,td{border:1px solid #475569;padding:4px 6px;text-align:center;vertical-align:middle}' +
-'th{background:#e6f5f3;font-size:9pt}.tal{text-align:left}.detail{font-size:8pt;color:#64748b;font-weight:400}' +
-'.sub{font-size:8pt;font-weight:400;color:#475569}.sub-title{font-weight:800;font-size:9.5pt;margin:8px 0 3px}' +
-'.calc{font-size:9.5pt;margin-top:4px}.cat{font-size:9pt;background:#f1f5f9;border-radius:6px;padding:6px 8px;margin-top:5px}' +
-'.hit{color:#0f766e}.kode-box{margin-top:12px;font-size:11pt;border:2px solid #0f766e;border-radius:8px;padding:8px 12px;display:inline-block}' +
-'.kode-box .kode{font-size:16pt;color:#0f766e}' +
-'.ttd{display:flex;justify-content:center;margin-top:28px;text-align:center;font-size:10pt;page-break-inside:avoid}.ttd .space{height:52px}';
+  '.doc-head{text-align:center;border-bottom:3px double #0f766e;padding-bottom:10px;margin-bottom:12px}' +
+  '.doc-head h1{font-size:12pt;margin:0;letter-spacing:.5px}.doc-head h2{font-size:15pt;margin:2px 0;color:#0f766e}' +
+  '.doc-head h3{font-size:10.5pt;margin:2px 0 8px;font-weight:700}' +
+  'table.ident{width:100%;border-collapse:collapse;margin-top:6px;font-size:9.5pt}table.ident td{border:none;padding:1.5px 4px;text-align:left}' +
+  '.bab{margin-top:14px}.bab-title{background:#0f766e;color:#fff;font-weight:800;font-size:10.5pt;padding:5px 10px;border-radius:6px 6px 0 0}' +
+  '.materi{margin-top:10px;page-break-inside:avoid}.materi h3{font-size:10.5pt;margin:0 0 5px}' +
+  'table{width:100%;border-collapse:collapse;font-size:9.5pt}th,td{border:1px solid #475569;padding:4px 6px;text-align:center;vertical-align:middle}' +
+  'th{background:#e6f5f3;font-size:9pt}.tal{text-align:left}.detail{font-size:8pt;color:#64748b;font-weight:400}' +
+  '.sub{font-size:8pt;font-weight:400;color:#475569}.sub-title{font-weight:800;font-size:9.5pt;margin:8px 0 3px}' +
+  '.calc{font-size:9.5pt;margin-top:4px}.cat{font-size:9pt;background:#f1f5f9;border-radius:6px;padding:6px 8px;margin-top:5px}' +
+  '.hit{color:#0f766e}.kode-box{margin-top:12px;font-size:11pt;border:2px solid #0f766e;border-radius:8px;padding:8px 12px;display:inline-block}' +
+  '.kode-box .kode{font-size:16pt;color:#0f766e}' +
+  '.ttd{display:flex;justify-content:center;margin-top:28px;text-align:center;font-size:10pt;page-break-inside:avoid}.ttd .space{height:52px}';
 
 function printMateriTable(m, skor, r) {
   if (m.tipe === 'tunggal') {
@@ -1597,7 +1597,7 @@ function printMateriTable(m, skor, r) {
       m.items.map(it => {
         const v = skor[it.id];
         return '<tr><td class="tal">' + esc(it.nama) + (it.detail ? '<div class="detail">' + esc(it.detail) + '</div>' : '') + '</td>' +
-          '<td>' + (v === 3 ? 'â—' : '') + '</td><td>' + (v === 2 ? 'â—' : '') + '</td><td>' + (v === 1 ? 'â—' : '') + '</td>' +
+          '<td>' + (v === 3 ? '●' : '') + '</td><td>' + (v === 2 ? '●' : '') + '</td><td>' + (v === 1 ? '●' : '') + '</td>' +
           '<td><b>' + (v != null ? v : '') + '</b></td></tr>';
       }).join('') + '</tbody></table>';
   }
@@ -1608,7 +1608,7 @@ function printMateriTable(m, skor, r) {
     const cell = skor[it.id] || {};
     const hit = m.pilihTerbaik && (r.terpilih || []).indexOf(it.id) >= 0;
     const tot = asp.reduce((t, x) => t + (cell[x.id] || 0), 0);
-    return '<tr><td class="tal">' + esc(it.nama) + (hit ? ' <span class="hit">âœ“</span>' : '') + '</td>' +
+    return '<tr><td class="tal">' + esc(it.nama) + (hit ? ' <span class="hit">✓</span>' : '') + '</td>' +
       asp.map(x => '<td>' + (cell[x.id] != null ? cell[x.id] : '') + '</td>').join('') +
       '<td><b>' + (tot > 0 ? tot : '') + '</b></td></tr>';
   };
@@ -1666,7 +1666,7 @@ function buildPrintHtml(a, h) {
     '</table></div>' + body + '</body></html>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• AKSI GLOBAL (data-act) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ AKSI GLOBAL (data-act) ════════════════ */
 document.addEventListener('click', async e => {
   const el = e.target.closest('[data-act]'); if (!el) return;
   const act = el.dataset.act, id = el.dataset.id;
@@ -1735,7 +1735,7 @@ document.addEventListener('click', async e => {
     if (!ok) return;
     try {
       await api('submitAssessment', id);
-      toast('Assessment berhasil disubmit ðŸŽ‰', 'success');
+      toast('Assessment berhasil disubmit 🎉', 'success');
       refreshData();
       if (state.view === 'hasil') showHasil(id); else goView('hasil', id);
     } catch (err) { toast(err.message, 'error'); }
@@ -1803,12 +1803,12 @@ document.addEventListener('click', async e => {
   }
 });
 
-/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• INIT â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════ INIT ════════════════ */
 const App = {
   init() {
     // Firebase web app environment ready
     let t = null;
-    try { t = localStorage.getItem('ppdb_token'); } catch (e) {}
+    try { t = localStorage.getItem('ppdb_token'); } catch (e) { }
     /* Identitas sekolah di layar login/boot diambil dari CONFIG sheet, bukan
      * ditulis di HTML  supaya ganti tahun pelajaran tidak perlu deploy ulang. */
     apiNoAuth('getPublicBranding').then(b => {
@@ -1816,7 +1816,7 @@ const App = {
       state.config.sekolah = b.sekolah;
       state.config.tahunPelajaran = b.tahunPelajaran;
       applyBranding();
-    }).catch(() => {});
+    }).catch(() => { });
     if (!t) { showLogin(); return; }
     Auth.token = t;
     api('getInitialData').then(res => {

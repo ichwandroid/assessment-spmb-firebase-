@@ -1,8 +1,8 @@
-  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
- * JS_Wizard.html  Wizard Assessment (role & ownership aware)
- * Staff (Koordinator/Admin): semua sentra + Submit Final.
- * Assessor: sentra tugas yang belum diklaim rekan lain.
- * â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* ════════════════════════════════════════════════════════════════
+* JS_Wizard.html  Wizard Assessment (role & ownership aware)
+* Staff (Koordinator/Admin): semua sentra + Submit Final.
+* Assessor: sentra tugas yang belum diklaim rekan lain.
+* ════════════════════════════════════════════════════════════════ */
 
 (function injectWizardStyle() {
   const s = document.createElement('style');
@@ -150,22 +150,35 @@ function wizardStart(existing) {
   window.scrollTo({ top: 0 });
 }
 
+/* Dipakai khusus oleh pemilih siswa cepat. Assessment yang sudah ada langsung
+ * dibuka pada sentra yang bisa dinilai, bukan kembali ke halaman data peserta. */
+function wizardStartAssessmentForm(existing) {
+  wizardStart(existing);
+  if (!WZ || WZ.submitted) return;
+  let target = WZ.steps.findIndex(step => step.type === 'sentra' &&
+    WZ.data.meta.sentra[step.sid].status !== 'FINAL' && !wizLocked(step.sid));
+  if (target < 0) target = WZ.steps.findIndex(step => step.type === 'sentra' && !wizLocked(step.sid));
+  if (target < 0) target = WZ.steps.findIndex(step => step.type === 'review');
+  if (target >= 0) goStep(target);
+}
+
 function renderWizard() {
   setView(
     '<div>' +
-    // Bar sticky: py-2.5 â†’ py-3, dan pills: mt-2.5 gap-1.5 â†’ mt-3 gap-2
+    // Bar sticky: py-2.5 → py-3, dan pills: mt-2.5 gap-1.5 → mt-3 gap-2
     '<div class="sticky top-16 z-30 -mx-4 px-4 py-3 bg-slate-50/95 backdrop-blur-md border-b border-slate-200/70">' +
-      '<div class="flex items-center gap-2">' +
-        '<button type="button" onclick="wizExit()" title="Keluar wizard" aria-label="Keluar dari wizard" class="w-9 h-9 rounded-xl bg-white border border-slate-200 grid place-items-center text-slate-500 hover:text-rose-500 hover:border-rose-200 active:scale-95 transition shrink-0">' + ic('x', 'w-4 h-4') + '</button>' +
-        '<div class="min-w-0 flex-1">' +
-          '<p id="wiz-mode-tag" class="text-[10px] font-extrabold uppercase tracking-widest text-teal-600 leading-none"></p>' +
-          '<p id="wiz-title" class="font-extrabold text-sm text-slate-800 truncate mt-0.5"></p>' +
-        '</div>' +
-        '<div id="wiz-save-ind" class="shrink-0"></div>' +
-      '</div>' +
-      '<div id="wiz-pills" class="mt-3 flex gap-2 overflow-x-auto no-scrollbar"></div>' +
+    '<div class="flex items-center gap-2">' +
+    '<button type="button" onclick="wizExit()" title="Keluar wizard" aria-label="Keluar dari wizard" class="w-9 h-9 rounded-xl bg-white border border-slate-200 grid place-items-center text-slate-500 hover:text-rose-500 hover:border-rose-200 active:scale-95 transition shrink-0">' + ic('x', 'w-4 h-4') + '</button>' +
+    '<button type="button" onclick="wizOpenSwitcher()" title="Ganti siswa" aria-label="Ganti ke form siswa lain" class="h-9 px-2.5 rounded-xl bg-white border border-slate-200 inline-flex items-center gap-1.5 text-teal-700 hover:border-teal-300 hover:bg-teal-50 active:scale-95 transition shrink-0">' + ic('users', 'w-4 h-4') + '<span class="hidden sm:inline text-[11px] font-extrabold">Ganti siswa</span></button>' +
+    '<div class="min-w-0 flex-1">' +
+    '<p id="wiz-mode-tag" class="text-[10px] font-extrabold uppercase tracking-widest text-teal-600 leading-none"></p>' +
+    '<p id="wiz-title" class="font-extrabold text-sm text-slate-800 truncate mt-0.5"></p>' +
     '</div>' +
-    // Dan kontainer langkah: pt-4 â†’ pt-5
+    '<div id="wiz-save-ind" class="shrink-0"></div>' +
+    '</div>' +
+    '<div id="wiz-pills" class="mt-3 flex gap-2 overflow-x-auto no-scrollbar"></div>' +
+    '</div>' +
+    // Dan kontainer langkah: pt-4 → pt-5
     '<div id="wiz-step" class="pt-5 pb-36"></div>' +
     '</div>' +
     '<div id="wiz-bar" class="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200/70" style="padding-bottom:env(safe-area-inset-bottom)"></div>');
@@ -215,12 +228,14 @@ function renderBar() {
       '<button class="btn-soft flex-1" onclick="wizBack()">' + ARROW_L + ' Kembali</button>' +
       '<button id="wiz-next-btn" class="btn-primary flex-[2]" onclick="wizNext()">' + (next.type === 'review' ? 'Review & Finalisasi' : 'Lanjutkan') + ' ' + ARROW_R + '</button></div>';
   } else if (st.type === 'review') {
+    const mySids = WZ.steps.filter(step => step.type === 'sentra').map(step => step.sid);
+    const canFinish = Auth.isStaff() || mySids.every(sid => WZ.data.meta.sentra[sid].status === 'FINAL');
     html = '<div class="max-w-5xl mx-auto px-4 py-3 flex gap-3">' +
       '<button class="btn-soft flex-1" onclick="wizBack()">' + ARROW_L + ' Kembali</button>' +
       '<button id="wiz-draft-btn" class="btn-soft flex-1" onclick="wizSaveDraftManual()">' + ic('save', 'w-4 h-4') + ' Draft</button>' +
       (Auth.isStaff()
         ? '<button id="wiz-submit-btn" class="btn-primary flex-[2]" onclick="wizSubmitFinal()">' + ic('check', 'w-4 h-4') + ' Submit Final</button>'
-        : '<button id="wiz-finish-btn" class="btn-primary flex-[2]" onclick="wizFinish()">' + ic('check', 'w-4 h-4') + ' Selesai</button>') +
+        : '<button id="wiz-finish-btn" class="btn-primary flex-[2]" ' + (canFinish ? '' : 'disabled title="Finalisasi semua sentra Anda terlebih dahulu" ') + 'onclick="wizFinish()">' + ic('check', 'w-4 h-4') + ' Selesai</button>') +
       '</div>';
   } else { bar.style.display = 'none'; return; }
   bar.style.display = '';
@@ -254,11 +269,17 @@ function wizSaveIndicator(st) {
   else el.innerHTML = '';
 }
 
-/* â•â•â•â•â•â•â•â•â•â• STEP: DATA PESERTA â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ STEP: DATA PESERTA ══════════ */
 function modeChip(mode, label) {
   const on = WZ.mode === mode;
   return '<button type="button" class="py-2.5 rounded-xl text-xs font-extrabold transition ' +
     (on ? 'bg-white text-teal-700 shadow-soft' : 'text-slate-500 hover:text-slate-700') + '" onclick="wizSetMode(\'' + mode + '\')">' + label + '</button>';
+}
+function shortStudentName(name, maxLength) {
+  const full = String(name || '').trim();
+  // Daftar pada modal sempit; 20 karakter menjaga ruang untuk badge status.
+  const limit = maxLength || 20;
+  return full.length > limit ? full.slice(0, limit).replace(/\s+$/, '') + '...' : full;
 }
 function pesertaListHtml(q) {
   const ql = String(q || '').toLowerCase().trim();
@@ -269,10 +290,10 @@ function pesertaListHtml(q) {
     '<button type="button" class="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 hover:border-teal-300 hover:bg-teal-50/40 active:scale-[.99] transition text-left" onclick="wizPilihPeserta(\'' + esc(p.id_peserta) + '\')">' +
     '<span class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 grid place-items-center font-extrabold text-[11px] shrink-0">' + esc(inisial(p.nama)) + '</span>' +
     '<span class="flex-1 min-w-0">' +
-    '<span class="block font-bold text-[13px] leading-snug text-slate-800 truncate">' + esc(p.nama) + '</span>' +
+    '<span class="block font-bold text-[13px] leading-snug text-slate-800 truncate" title="' + esc(p.nama) + '">' + esc(shortStudentName(p.nama)) + '</span>' +
     '<span class="block text-[11px] text-slate-400 truncate mt-0.5">No. ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? ' | ' + esc(p.asal_tk) : '') + '</span>' +
     '</span>' +
-    (p.jumlah_assessment ? '<span class="badge bg-blue-50 text-blue-600 shrink-0">' + p.jumlah_assessment + 'Ã—</span>' : '') +
+    (p.jumlah_assessment ? '<span class="badge bg-blue-50 text-blue-600 shrink-0">' + p.jumlah_assessment + ' Penilai</span>' : '') +
     '<svg class="w-4 h-4 text-slate-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
     '</button>').join('');
 }
@@ -417,7 +438,7 @@ async function wizEnsurePeserta() {
   return false;
 }
 
-/* â•â•â•â•â•â•â•â•â•â• STEP: SENTRA â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ STEP: SENTRA ══════════ */
 function stepSentraHtml(sid) {
   const s = state.schema.sentra.find(x => x.id === sid);
   const h = calcHasil(WZ.data);
@@ -434,7 +455,7 @@ function stepSentraHtml(sid) {
     '<p class="text-[10px] font-extrabold uppercase tracking-widest text-white/75">' + s.bab + '  Observasi</p>' +
     '<h2 class="text-lg sm:text-xl font-extrabold leading-tight truncate mt-0.5">' + esc(s.nama) + '</h2>' +
     '</div>' +
-    '<span id="wiz-hero-rerata" class="badge bg-white/20 text-white shrink-0 !px-3 !py-1.5">Rerata: ' + (rv != null ? rv : 'â€“') + '</span>' +
+    '<span id="wiz-hero-rerata" class="badge bg-white/20 text-white shrink-0 !px-3 !py-1.5">Rerata: ' + (rv != null ? rv : '–') + '</span>' +
     '</div>' +
     '<div class="relative mt-5">' +
     '<div class="h-2 rounded-full bg-white/25 overflow-hidden"><div id="wiz-hero-bar" class="h-full rounded-full bg-white transition-all duration-500" style="width:' + (total ? Math.round(terisi / total * 100) : 0) + '%"></div></div>' +
@@ -444,7 +465,7 @@ function stepSentraHtml(sid) {
   if (st.status === 'FINAL') {
     html += Auth.isStaff()
       ? '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('info', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 leading-relaxed">Sentra ini sudah difinalisasi oleh <b>' + esc(st.assessor) + '</b>. Sebagai Koordinator/Admin Anda tetap dapat mengubah.</p></div>'
-      : '<div class="card border-emerald-200 bg-emerald-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-emerald-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-emerald-800 leading-relaxed">âœ“ Difinalisasi oleh <b>' + esc(st.assessor) + '</b>' + (st.waktu ? ' | ' + esc(st.waktu) : '') + '  terkunci. Hubungi Koordinator untuk membuka.</p></div>';
+      : '<div class="card border-emerald-200 bg-emerald-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-emerald-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-emerald-800 leading-relaxed">✓ Difinalisasi oleh <b>' + esc(st.assessor) + '</b>' + (st.waktu ? ' | ' + esc(st.waktu) : '') + '  terkunci. Hubungi Koordinator untuk membuka.</p></div>';
   } else if (st.owner) {
     if (Auth.isStaff()) {
       html += '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 flex-1 leading-relaxed">Sentra ini diklaim oleh <b>' + esc(st.ownerName || st.owner) + '</b>. Sebagai Koordinator/Admin Anda tetap dapat mengubah.</p></div>';
@@ -502,7 +523,7 @@ function materiItemsHtml(m, d, r) {
     return '<div class="py-3.5 border-t border-slate-100">' +
       '<div class="flex items-center gap-2 flex-wrap">' +
       '<p class="text-sm font-bold text-slate-700 flex-1 min-w-[150px] leading-snug">' + esc(it.nama) + '</p>' +
-      (m.pilihTerbaik ? '<span class="hit-badge badge ' + (hit ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400') + '" data-hitmark="' + it.id + '">' + (hit ? 'âœ“ Dihitung' : 'Belum terpilih') + '</span>' : '') +
+      (m.pilihTerbaik ? '<span class="hit-badge badge ' + (hit ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400') + '" data-hitmark="' + it.id + '">' + (hit ? '✔ Dihitung' : 'Belum terpilih') + '</span>' : '') +
       '</div>' +
       '<div class="mt-2.5 grid gap-2">' +
       aspek.map(a => {
@@ -536,7 +557,7 @@ function materiCardHtml(m, mi, sid) {
     '<span id="mprog-' + m.id + '" class="badge shrink-0 !px-3 !py-1.5 ' + (r.lengkap ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600') + '">' + r.terisi + '/' + r.jumlahSel + '</span>' +
     '<svg class="materi-chev w-5 h-5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
     '</button>' +
-    /* 3 tingkat: grid â†’ overflow-hidden (polos) â†’ .m-inner (padding) */
+    /* 3 tingkat: grid → overflow-hidden (polos) → .m-inner (padding) */
     '<div class="materi-body ' + (isOpen ? '' : 'closed') + '"><div><div class="m-inner px-4 py-4 sm:px-5">' +
     pedomanHtml(m) +
     '<div class="bar-track mt-4"><div id="mbar-' + m.id + '" class="bar-fill ' + barColor(r) + '" style="width:' + width + '%"></div></div>' +
@@ -548,8 +569,8 @@ function materiCardHtml(m, mi, sid) {
     (m.tipe !== 'tunggal' ? '<p class="text-[10px] font-bold text-slate-400 mt-2.5">Skor: 3 = ' + esc(scoreLabel(m, 3)) + '  2 = ' + esc(scoreLabel(m, 2)) + '  1 = ' + esc(scoreLabel(m, 1)) + '</p>' : '') +
     '<div class="mt-3">' + materiItemsHtml(m, d, r) + '</div>' +
     '<div class="mt-4">' +
-    '<label class="label">Informasi Tambahan / Komentar / Catatan</label>' +
-    '<textarea rows="2" class="input resize-none" placeholder="Catatan untuk ' + esc(m.nama) + '..." oninput="wizCatatan(\'' + m.id + '\', this.value)">' + esc(d.catatan || '') + '</textarea>' +
+    '<label class="label">Informasi Tambahan / Komentar / Catatan <span class="text-rose-500">*</span></label>' +
+    '<textarea rows="2" required aria-required="true" class="input resize-none" placeholder="Catatan untuk ' + esc(m.nama) + ' (wajib diisi)..." oninput="wizCatatan(\'' + m.id + '\', this.value)">' + esc(d.catatan || '') + '</textarea>' +
     '</div>' +
     '</div></div></div></div>';
 }
@@ -557,13 +578,13 @@ function materiCardHtml(m, mi, sid) {
 function sentraCatatanHtml(s, sid) {
   const v = (WZ.data.catatanSentra || {})[sid] || '';
   return '<div class="card p-5 sm:p-6 anim-in ' + (wizLocked(sid) ? 'locked' : '') + '">' +
-    '<label class="label !mb-1">Informasi Tambahan  ' + esc(s.nama) + '</label>' +
-    '<p class="text-[11px] text-slate-400 leading-relaxed">Akan muncul pada kolom "Informasi Tambahan" di BAB IV (Total Nilai).</p>' +
-    '<textarea rows="3" class="input resize-none mt-3" placeholder="Ringkasan observasi sentra ini..." oninput="wizCatatanSentra(\'' + sid + '\', this.value)">' + esc(v) + '</textarea>' +
+    '<label class="label !mb-1">Informasi Tambahan  ' + esc(s.nama) + ' <span class="text-rose-500">*</span></label>' +
+    '<p class="text-[11px] text-slate-400 leading-relaxed">Wajib diisi dan akan muncul pada kolom "Informasi Tambahan" di BAB IV (Total Nilai).</p>' +
+    '<textarea rows="3" required aria-required="true" class="input resize-none mt-3" placeholder="Ringkasan observasi sentra ini (wajib diisi)..." oninput="wizCatatanSentra(\'' + sid + '\', this.value)">' + esc(v) + '</textarea>' +
     '</div>';
 }
 
-/* â•â•â•â•â•â•â•â•â•â• STEP: REVIEW â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ STEP: REVIEW ══════════ */
 function reviewRow(l, v) {
   return '<div class="flex justify-between gap-3 py-0.5"><span class="text-xs font-bold text-slate-400">' + esc(l) + '</span><span class="text-sm font-bold text-slate-700 text-right">' + esc(v) + '</span></div>';
 }
@@ -571,6 +592,7 @@ function sentraReviewCard(s) {
   const st = WZ.data.meta.sentra[s.id];
   const h = calcHasil(WZ.data);
   const kurang = s.materi.reduce((t, m) => t + (h.materi[m.id].jumlahSel - h.materi[m.id].terisi), 0);
+  const missing = sentraMissing_(WZ.data, s);
   let topHtml;
   if (st.status === 'FINAL') {
     topHtml = '<div class="flex items-center gap-2 flex-wrap">' +
@@ -583,14 +605,14 @@ function sentraReviewCard(s) {
       : 'Belum diklaim  mengisi skor otomatis menjadikannya milik Anda';
     topHtml = '<div class="flex items-center gap-2 flex-wrap">' +
       '<span class="badge ' + (st.owner === Auth.user.username ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-500') + '">' + esc(claimTxt) + '</span>' +
-      '<button class="btn-primary !py-2.5 !text-xs ' + (kurang ? 'opacity-40 pointer-events-none' : '') + '" onclick="wizFinalize(\'' + s.id + '\')">' + ic('check', 'w-4 h-4') + ' Finalisasi ' + esc(SENTRA_SHORT[s.id] || s.singkat || s.nama) + '</button>' +
-      (kurang ? '<span class="text-[11px] font-bold text-amber-600">' + kurang + ' aspek belum dinilai</span>' : '') +
+      '<button class="btn-primary !py-2.5 !text-xs ' + (missing.length ? 'opacity-40 pointer-events-none' : '') + '" onclick="wizFinalize(\'' + s.id + '\')">' + ic('check', 'w-4 h-4') + ' Finalisasi ' + esc(SENTRA_SHORT[s.id] || s.singkat || s.nama) + '</button>' +
+      (missing.length ? '<span class="text-[11px] font-bold text-amber-600">' + (kurang ? kurang + ' aspek belum dinilai · ' : '') + missing.length + ' isian wajib belum lengkap</span>' : '') +
       '</div>';
   }
   return '<div class="card p-5 anim-in mt-3">' +
     '<div class="flex items-center justify-between gap-2 flex-wrap">' +
     '<h3 class="font-extrabold text-slate-800">' + s.bab + '  ' + esc(s.nama) + '</h3>' +
-    '<span class="badge ' + (h.sentra[s.id] != null ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-400') + '">Rerata ' + (h.sentra[s.id] != null ? h.sentra[s.id] : 'â€“') + '</span></div>' +
+    '<span class="badge ' + (h.sentra[s.id] != null ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-400') + '">Rerata ' + (h.sentra[s.id] != null ? h.sentra[s.id] : '–') + '</span></div>' +
     '<div class="mt-2 divide-y divide-slate-100">' + s.materi.map(m => {
       const r = h.materi[m.id];
       return '<button type="button" class="w-full flex items-center gap-3 py-2.5 text-left" onclick="wizGoMateri(\'' + m.id + '\')">' +
@@ -606,7 +628,7 @@ function otherSentraCard(s) {
   const st = (WZ.data.meta.sentra[s.id]) || {};
   const assignedToMe = (Auth.user.assignments || []).indexOf(s.id) >= 0;
   let desc;
-  if (st.status === 'FINAL') desc = 'âœ“ Difinalisasi oleh ' + (st.assessor || '');
+  if (st.status === 'FINAL') desc = '✓ Difinalisasi oleh ' + (st.assessor || '');
   else if (assignedToMe && st.owner) desc = ic('lock', 'w-3 h-3') + ' Sedang dikerjakan oleh ' + esc(st.ownerName || st.owner) + '  tidak dapat Anda handle';
   else desc = 'Belum final  dinilai assessor lain';
   return '<div class="card p-4 anim-in mt-3 flex items-center gap-3 bg-slate-50/60">' +
@@ -628,21 +650,21 @@ function bab4Preview(h) {
     rows.map(r => {
       const show = staff || sentraMineInWiz(r[4]);
       const st = WZ.data.meta.sentra[r[4]];
-      const val = show ? (r[2] == null ? 'â€“' : r[2]) : (st.status === 'FINAL' ? 'âœ“ Final' : '|');
+      const val = show ? (r[2] == null ? '–' : r[2]) : (st.status === 'FINAL' ? '✓ Final' : '|');
       return '<tr><td class="py-2 font-bold text-slate-400">' + r[0] + '</td><td class="py-2 font-bold text-slate-700">' + esc(r[1]) + '</td>' +
         '<td class="py-2 text-right font-extrabold ' + (show && r[2] != null ? 'text-teal-700' : 'text-slate-300') + '">' + val + '</td>' +
         '<td class="py-2 pl-4 text-xs text-slate-500 max-w-[220px] truncate">' + (show ? esc(r[3] || '-') : '') + '</td></tr>';
     }).join('') +
     '<tr class="bg-slate-50/70"><td></td><td class="py-2.5 font-extrabold text-slate-800">Rerata Umum (Nilai Akhir)</td>' +
     '<td class="py-2.5 text-right font-extrabold text-teal-700">' + (staff && h.nilaiAkhir != null ? h.nilaiAkhir : '|') + '</td>' +
-    '<td class="py-2.5 pl-4 text-xs text-slate-400">' + (staff ? 'Calistung: ' + (h.calistung == null ? 'â€“' : h.calistung) : 'Dihitung saat submit final') + '</td></tr>' +
+    '<td class="py-2.5 pl-4 text-xs text-slate-400">' + (staff ? 'Calistung: ' + (h.calistung == null ? '–' : h.calistung) : 'Dihitung saat submit final') + '</td></tr>' +
     '</tbody></table></div>' +
     (staff
       ? '<div class="mt-4 p-4 rounded-2xl bg-gradient-to-r from-teal-50 to-emerald-50 border border-teal-100 flex items-center gap-4 flex-wrap">' +
-        '<div class="flex-1 min-w-[180px]"><p class="text-[10px] font-extrabold uppercase tracking-widest text-teal-700">Kode Hasil Asesmen</p>' +
-        '<p class="text-[11px] text-slate-500 mt-1">' + esc(kodeRuleText()) + '</p></div>' +
-        (h.kode ? '<span class="kode-badge kode-' + h.kode + '">' + h.kode + '</span>' : '<span class="badge bg-slate-100 text-slate-400">Belum ditentukan</span>') +
-        '</div>'
+      '<div class="flex-1 min-w-[180px]"><p class="text-[10px] font-extrabold uppercase tracking-widest text-teal-700">Kode Hasil Asesmen</p>' +
+      '<p class="text-[11px] text-slate-500 mt-1">' + esc(kodeRuleText()) + '</p></div>' +
+      (h.kode ? '<span class="kode-badge kode-' + h.kode + '">' + h.kode + '</span>' : '<span class="badge bg-slate-100 text-slate-400">Belum ditentukan</span>') +
+      '</div>'
       : '') +
     '</div>';
 }
@@ -679,7 +701,7 @@ function stepReviewHtml() {
   return html;
 }
 
-/* â•â•â•â•â•â•â•â•â•â• STEP: SELESAI â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ STEP: SELESAI ══════════ */
 function stepDoneHtml() {
   if (WZ.submitted) {
     const h = WZ.hasilFinal || calcHasil(WZ.data);
@@ -694,13 +716,13 @@ function stepDoneHtml() {
       '<p class="text-sm text-slate-500 mt-1">' + esc(WZ.nama) + ' | No. ' + esc(WZ.nomor || WZ.id_peserta) + '</p>' +
       '<div class="mt-4 flex flex-col items-center gap-1">' +
       '<span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Kode Hasil Asesmen</span>' +
-      (h.kode ? '<span id="done-kode" class="kode-badge kode-' + h.kode + '">' + h.kode + '</span>' : '<span id="done-kode" class="badge bg-slate-100 text-slate-400">â€“</span>') +
+      (h.kode ? '<span id="done-kode" class="kode-badge kode-' + h.kode + '">' + h.kode + '</span>' : '<span id="done-kode" class="badge bg-slate-100 text-slate-400">–</span>') +
       '<p class="text-xs font-bold text-slate-500">' + esc(h.kodeLabel || '') + '</p>' +
       '</div>' +
       '<div class="mt-5 grid grid-cols-2 gap-2.5 text-left">' +
-      '<div class="done-stat col-span-2 bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100"><p class="text-[10px] font-extrabold uppercase tracking-wide text-teal-700">Nilai Akhir (Rerata ' + state.schema.sentra.length + ' Sentra)</p><p class="text-2xl font-extrabold text-teal-700 mt-0.5">' + (h.nilaiAkhir != null ? h.nilaiAkhir : 'â€“') + '</p></div>' +
+      '<div class="done-stat col-span-2 bg-gradient-to-br from-teal-50 to-emerald-50 border border-teal-100"><p class="text-[10px] font-extrabold uppercase tracking-wide text-teal-700">Nilai Akhir (Rerata ' + state.schema.sentra.length + ' Sentra)</p><p class="text-2xl font-extrabold text-teal-700 mt-0.5">' + (h.nilaiAkhir != null ? h.nilaiAkhir : '–') + '</p></div>' +
       state.schema.sentra.map(s => statMini(s.singkat || s.nama, h.sentra[s.id] != null ? h.sentra[s.id] : '-')).join('') +
-      statMini('Calistung', h.calistung != null ? h.calistung : 'â€“') +
+      statMini('Calistung', h.calistung != null ? h.calistung : '–') +
       '</div>' +
       '<p class="text-[11px] text-slate-400 mt-4">ID: ' + esc(WZ.id) + ' | Pembuat: ' + esc(WZ.creator) + ' | ' + fmtTanggal(WZ.tanggal) + '</p>' +
       '</div>' +
@@ -753,13 +775,15 @@ function wizDoneAnim() {
       d.style.background = colors[i % colors.length];
       burst.appendChild(d);
       gsap.fromTo(d, { x: 0, y: 0, opacity: 1, scale: 1 },
-        { x: (Math.random() - .5) * 260, y: (Math.random() - .75) * 200, opacity: 0, scale: .3,
-          duration: .9 + Math.random() * .6, delay: .2 + Math.random() * .15, ease: 'power2.out' });
+        {
+          x: (Math.random() - .5) * 260, y: (Math.random() - .75) * 200, opacity: 0, scale: .3,
+          duration: .9 + Math.random() * .6, delay: .2 + Math.random() * .15, ease: 'power2.out'
+        });
     }
   }
 }
 
-/* â•â•â•â•â•â•â•â•â•â• INTERAKSI SKOR & CATATAN â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ INTERAKSI SKOR & CATATAN ══════════ */
 function wizToggle(mid) {
   const card = $('#mc-' + mid); if (!card) return;
   const body = card.querySelector('.materi-body');
@@ -806,6 +830,7 @@ function wizCatatanSentra(sid, v) {
   WZ.data.catatanSentra[sid] = v;
   markDirty();
 }
+
 function wizUpdateMateriUi(mid) {
   const m = materiById(mid); if (!m) return;
   const r = calcMateri(m, WZ.data[mid]);
@@ -828,7 +853,7 @@ function wizUpdateMateriUi(mid) {
     $$('#mc-' + mid + ' [data-hitmark]').forEach(el => {
       const on = r.terpilih.indexOf(el.dataset.hitmark) >= 0;
       el.className = 'hit-badge badge ' + (on ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-400');
-      el.textContent = on ? 'âœ“ Dihitung' : 'Belum terpilih';
+      el.textContent = on ? '✓ Dihitung' : 'Belum terpilih';
     });
   }
   wizUpdateHero();
@@ -848,10 +873,10 @@ function wizUpdateHero() {
   const total = s.materi.reduce((t, m) => t + h.materi[m.id].jumlahSel, 0);
   const te = $('#wiz-hero-prog'); if (te) te.textContent = terisi + ' / ' + total + ' aspek dinilai';
   const tb = $('#wiz-hero-bar'); if (tb) tb.style.width = (total ? Math.round(terisi / total * 100) : 0) + '%';
-  const tr = $('#wiz-hero-rerata'); if (tr) tr.textContent = 'Rerata: ' + (h.sentra[s.id] != null ? h.sentra[s.id] : 'â€“');
+  const tr = $('#wiz-hero-rerata'); if (tr) tr.textContent = 'Rerata: ' + (h.sentra[s.id] != null ? h.sentra[s.id] : '–');
 }
 
-/* â•â•â•â•â•â•â•â•â•â• AUTOSAVE â•â•â•â•â•â•â•â•â•â• */
+/* ══════════ AUTOSAVE ══════════ */
 function markDirty() {
   if (!WZ || WZ.submitted) return;
   WZ.dirty = true;
@@ -884,7 +909,7 @@ async function wizAutosave(force) {
     const msg = String(e && e.message || '');
     /* Error yang tidak akan sembuh dengan dicoba ulang: hentikan retry. */
     if (msg === 'SESSION_EXPIRED' || msg === 'PIN_DEFAULT' ||
-        msg.indexOf('Akses ditolak') >= 0 || msg.indexOf('tidak ditugaskan') >= 0) {
+      msg.indexOf('Akses ditolak') >= 0 || msg.indexOf('tidak ditugaskan') >= 0) {
       terminal = true;
       if (msg === 'PIN_DEFAULT') { toast('Ganti PIN default Anda dulu  perubahan belum tersimpan.', 'error'); if (typeof showPinGate === 'function') showPinGate(); }
       else if (msg === 'SESSION_EXPIRED') { /* forceLogin sudah menangani */ }
@@ -912,7 +937,7 @@ async function wizAutosave(force) {
       }
     } else {
       /* B13: retry dibatasi + backoff. Sebelumnya retry 1,5 detik tanpa batas,
-         termasuk saat sesi sudah mati â†’ request menumpuk tanpa henti. */
+         termasuk saat sesi sudah mati → request menumpuk tanpa henti. */
       WZ.autoFails = (WZ.autoFails || 0) + 1;
       const now = Date.now();
       const pesan = 'Autosave gagal (' + WZ.autoFails + '/3): ' + msg;
@@ -942,7 +967,120 @@ async function wizSaveDraftManual() {
   toast(ok ? 'Draft tersimpan.' : 'Gagal menyimpan draft.', ok ? 'success' : 'error');
 }
 
-/* â•â•â•â•â•â•â•â•â•â• NAVIGASI & AKSI â•â•â•â•â•â•â•â•â•â• */
+function wizSwitcherPesertaHtml(q) {
+  const needle = String(q || '').toLowerCase().trim();
+  const assessments = state.riwayat || [];
+  const list = (state.peserta || []).filter(p => {
+    const text = [p.nama, p.nomor_peserta, p.asal_tk].join(' ').toLowerCase();
+    if (needle && text.indexOf(needle) < 0) return false;
+    const existing = assessments.find(a => a.id_peserta === p.id_peserta);
+    return !existing || existing.status !== 'SUBMITTED';
+  }).slice(0, 40);
+  if (!list.length) return '<p class="py-5 text-center text-sm text-slate-400">Siswa yang dapat dinilai tidak ditemukan.</p>';
+  return list.map(p => {
+    const existing = assessments.find(a => a.id_peserta === p.id_peserta && a.status !== 'SUBMITTED');
+    const active = WZ && existing && existing.id === WZ.id;
+    return '<button type="button" data-wiz-peserta-id="' + esc(p.id_peserta) + '" class="w-full text-left flex items-center gap-3 p-3 rounded-2xl border ' +
+      (active ? 'border-teal-300 bg-teal-50/60' : 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40') + ' transition">' +
+      '<span class="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 grid place-items-center font-extrabold text-xs shrink-0">' + esc(inisial(p.nama)) + '</span>' +
+      '<span class="flex-1 min-w-0"><span class="block font-bold text-sm text-slate-800 truncate" title="' + esc(p.nama) + '">' + esc(shortStudentName(p.nama)) + '</span>' +
+      '<span class="block text-[11px] text-slate-400 truncate mt-0.5">No. ' + esc(p.nomor_peserta || '-') + '</span></span>' +
+      '<span class="badge shrink-0 ' + (active ? 'bg-teal-600 text-white' : existing ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-500') + '">' + (active ? 'Aktif' : existing ? 'Lanjutkan' : 'Nilai') + '</span>' +
+    '</button>';
+  }).join('');
+}
+
+/* Draft aktif disimpan sebelum form siswa lain dimuat, sehingga guru dapat
+ * bergantian menilai beberapa siswa dalam satu sesi tanpa kehilangan isian. */
+async function wizOpenSwitcher() {
+  if (!WZ || WZ.saving) { toast('Tunggu proses penyimpanan selesai.', 'info'); return; }
+  if (WZ.dirty) {
+    if (!WZ.id_peserta) { toast('Pilih peserta terlebih dahulu atau batalkan form baru ini.', 'info'); return; }
+    const saved = await wizAutosave(true);
+    if (!saved) { toast('Draft aktif gagal disimpan. Perpindahan dibatalkan.', 'error'); return; }
+  }
+
+  /* Ambil daftar terbaru saat pemilih dibuka. Ini memastikan draft siswa yang
+   * baru saja dibuat dalam sesi yang sama juga langsung muncul di daftar. */
+  try {
+    const res = await api('getInitialData');
+    Auth.user = res.user || Auth.user;
+    state.peserta = res.peserta || state.peserta;
+    state.riwayat = res.riwayat || state.riwayat;
+  } catch (e) { /* gunakan daftar lokal bila penyegaran tidak tersedia */ }
+
+  const canOpen = item => item.status !== 'SUBMITTED' && (Auth.isStaff() || (item.myPending || []).length);
+  const items = (state.riwayat || []).filter(canOpen);
+  if (WZ.id && !items.some(item => item.id === WZ.id)) items.unshift({ id: WZ.id, nama: WZ.nama, nomor: WZ.nomor, status: 'DRAFT', updated: '', myPending: [] });
+  items.sort((a, b) => (a.id === WZ.id ? -1 : b.id === WZ.id ? 1 : String(b.updated || '').localeCompare(String(a.updated || ''))));
+
+  const list = items.map(item =>
+    '<button type="button" data-wiz-switch-id="' + esc(item.id) + '" class="w-full text-left flex items-center gap-3 p-3 rounded-2xl border ' +
+      (item.id === WZ.id ? 'border-teal-300 bg-teal-50/60' : 'border-slate-200 hover:border-teal-300 hover:bg-teal-50/40') + ' transition">' +
+      '<span class="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 grid place-items-center font-extrabold text-xs shrink-0">' + esc(inisial(item.nama)) + '</span>' +
+      '<span class="flex-1 min-w-0"><span class="block font-bold text-sm text-slate-800 truncate" title="' + esc(item.nama) + '">' + esc(shortStudentName(item.nama)) + '</span>' +
+      '<span class="block text-[11px] text-slate-400 truncate mt-0.5">No. ' + esc(item.nomor || '-') + (item.id === WZ.id ? ' · Sedang dibuka' : '') + '</span></span>' +
+      (item.id === WZ.id ? '<span class="badge shrink-0 bg-teal-600 text-white">Aktif</span>' : '<span class="badge shrink-0 bg-slate-100 text-slate-500">Buka</span>') +
+    '</button>'
+  ).join('');
+  const ov = modalOpen(
+    '<div class="flex items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-5">' +
+      '<div class="min-w-0"><h3 class="text-lg font-extrabold text-slate-800">Ganti siswa</h3>' +
+      '<p class="text-xs text-slate-500 mt-1 leading-relaxed">Pilih siswa untuk langsung membuka form penilaiannya. Draft aktif sudah disimpan.</p></div>' +
+      '<button type="button" data-wiz-switch-close class="w-9 h-9 shrink-0 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 grid place-items-center" aria-label="Tutup">' + ic('x', 'w-4 h-4') + '</button>' +
+    '</div>' +
+    '<div class="wiz-switcher-body grid gap-5 p-4 pt-5 sm:grid-cols-2 sm:gap-6 sm:px-6 sm:pb-6">' +
+      '<section class="min-w-0 flex flex-col"><p class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Draft berjalan</p>' +
+      '<div class="wiz-switcher-list mt-2 grid gap-2">' +
+        (list || '<p class="py-3 text-center text-sm text-slate-400">Belum ada draft lain.</p>') +
+      '</div></section>' +
+      '<section class="min-w-0 flex flex-col"><label for="wiz-switch-q" class="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Pilih siswa untuk dinilai</label>' +
+      '<input id="wiz-switch-q" class="input mt-2 !py-2.5" placeholder="Cari nama atau nomor peserta..." autocomplete="off">' +
+      '<div id="wiz-switch-peserta" class="wiz-switcher-list mt-2 grid gap-2">' + wizSwitcherPesertaHtml('') + '</div></section>' +
+    '</div>',
+    { cardClass: 'modal-switcher !max-w-2xl !p-0 !overflow-hidden' }
+  );
+  ov.querySelector('[data-wiz-switch-close]').addEventListener('click', modalClose);
+  ov.querySelectorAll('[data-wiz-switch-id]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.wizSwitchId;
+    if (id === WZ.id) { modalClose(); return; }
+    ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
+    btn.innerHTML = SPIN_SVG.replace('w-5 h-5', 'w-4 h-4') + ' Membuka…';
+    try {
+      const res = await api('getAssessment', id);
+      modalClose();
+      wizardStartAssessmentForm(res.assessment);
+    } catch (e) {
+      toast('Assessment tidak dapat dibuka: ' + e.message, 'error');
+      ov.querySelectorAll('button').forEach(x => { x.disabled = false; });
+    }
+  }));
+  const search = ov.querySelector('#wiz-switch-q');
+  const pesertaBox = ov.querySelector('#wiz-switch-peserta');
+  const bindPeserta = () => ov.querySelectorAll('[data-wiz-peserta-id]').forEach(btn => btn.addEventListener('click', async () => {
+    const id = btn.dataset.wizPesertaId;
+    const existing = (state.riwayat || []).find(item => item.id_peserta === id && item.status !== 'SUBMITTED');
+    if (existing) {
+      if (existing.id === WZ.id) { modalClose(); return; }
+      ov.querySelectorAll('button').forEach(x => { x.disabled = true; });
+      try {
+        const res = await api('getAssessment', existing.id);
+        modalClose(); wizardStartAssessmentForm(res.assessment);
+      } catch (e) { toast('Assessment tidak dapat dibuka: ' + e.message, 'error'); ov.querySelectorAll('button').forEach(x => { x.disabled = false; }); }
+      return;
+    }
+    const p = (state.peserta || []).find(item => item.id_peserta === id); if (!p) return;
+    modalClose(); wizardStart();
+    WZ.id_peserta = p.id_peserta; WZ.nama = p.nama; WZ.nomor = p.nomor_peserta; WZ.asal_tk = p.asal_tk;
+    WZ.mode = 'lama'; WZ.pesertaBaru = null; WZ.steps = wizSteps(); markDirty();
+    goStep(1);
+    toast('Form penilaian dibuka: ' + p.nama, 'success', 2200);
+  }));
+  bindPeserta();
+  search.addEventListener('input', () => { pesertaBox.innerHTML = wizSwitcherPesertaHtml(search.value); bindPeserta(); });
+}
+
+/* ══════════ NAVIGASI & AKSI ══════════ */
 function goStep(i) {
   if (!WZ) return;
   const steps = WZ.steps;
@@ -1001,7 +1139,7 @@ function wizRefreshSteps() {
   if (!activeSid) return;
   const ni = WZ.steps.findIndex(s => s.type === 'sentra' && s.sid === activeSid);
   if (ni >= 0) { WZ.step = ni; return; }
-  /* Sentra hilang â†’ jangan diam-diam pindah ke sentra lain. */
+  /* Sentra hilang → jangan diam-diam pindah ke sentra lain. */
   WZ.step = Math.min(WZ.step, WZ.steps.length - 1);
   toast('Sentra ' + (SENTRA_SHORT[activeSid] || activeSid) + ' tidak lagi ada di daftar Anda. Data terbaru dimuat ulang.', 'info', 6000);
   if (WZ.id) {
@@ -1029,7 +1167,7 @@ async function wizFinalize(sid) {
     WZ.data.meta = res.assessment.data.meta;
     wizRefreshSteps();
     WZ.dirty = false;
-    toast(s.nama + ' difinalisasi âœ“', 'success');
+    toast(s.nama + ' difinalisasi ✓', 'success');
     renderStep(); renderBar();
   } catch (e) { toast(e.message, 'error', 5000); }
 }

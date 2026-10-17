@@ -98,7 +98,9 @@ function missingList_(data) {
     s.materi.forEach(function (m) {
       var h = hitungMateri_(m, data[m.id]);
       if (!h.lengkap) out.push(m.no + ' ' + m.nama + ' (' + (h.jumlahSel - h.terisi) + ' belum dinilai)');
+      if (!String((data[m.id] || {}).catatan || '').trim()) out.push(m.no + ' ' + m.nama + ' (komentar/catatan guru wajib diisi)');
     });
+    if (!String(((data.catatanSentra || {})[s.id]) || '').trim()) out.push(s.nama + ' (informasi tambahan sentra wajib diisi)');
   });
   return out;
 }
@@ -108,7 +110,9 @@ function sentraMissing_(data, s) {
   s.materi.forEach(function (m) {
     var h = hitungMateri_(m, (data || {})[m.id]);
     if (!h.lengkap) out.push(m.no + ' ' + m.nama + ' (' + (h.jumlahSel - h.terisi) + ' belum dinilai)');
+    if (!String((((data || {})[m.id] || {}).catatan) || '').trim()) out.push(m.no + ' ' + m.nama + ' (komentar/catatan guru wajib diisi)');
   });
+  if (!String((((data || {}).catatanSentra || {})[s.id]) || '').trim()) out.push(s.nama + ' (informasi tambahan sentra wajib diisi)');
   return out;
 }
 
@@ -217,4 +221,3 @@ function deriveStatus_(data) {
   });
   return allFinal ? 'SIAP_REVIEW' : 'DRAFT';
 }
-

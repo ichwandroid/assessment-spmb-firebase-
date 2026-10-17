@@ -66,3 +66,23 @@ summary::-webkit-details-marker { color: #94a3b8; }
 
 body.in-wizard #bottomnav { display: none; }
 
+/* Modal ganti siswa: daftar tetap dapat digulir tanpa membuat dialog
+   melampaui layar pendek, terutama saat keyboard ponsel terbuka. */
+.modal-switcher {
+  max-height: calc(100dvh - 1.5rem) !important;
+}
+.wiz-switcher-body {
+  max-height: calc(100dvh - 9.5rem);
+  overflow-y: auto;
+}
+.wiz-switcher-list {
+  max-height: min(15rem, 30dvh);
+  overflow-y: auto;
+  padding-right: .25rem;
+  overscroll-behavior: contain;
+}
+@media (min-width: 640px) {
+  .modal-switcher { max-height: min(42rem, calc(100dvh - 2rem)) !important; }
+  .wiz-switcher-body { max-height: calc(min(42rem, 100dvh - 2rem) - 6.25rem); }
+  .wiz-switcher-list { max-height: min(25rem, calc(100dvh - 12rem)); }
+}
