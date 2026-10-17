@@ -287,14 +287,14 @@ function pesertaListHtml(q) {
   if (ql) list = list.filter(p => (p.nama + ' ' + (p.nomor_peserta || '') + ' ' + (p.asal_tk || '') + ' ' + p.id_peserta).toLowerCase().indexOf(ql) >= 0);
   if (!list.length) return '<p class="text-sm text-slate-400 text-center py-8 leading-relaxed">Peserta tidak ditemukan.<br>Gunakan tab <b>Peserta Baru</b> untuk mendaftarkan.</p>';
   return list.slice(0, 40).map(p =>
-    '<button type="button" class="w-full flex items-center gap-3 p-3 rounded-2xl border border-slate-200 hover:border-teal-300 hover:bg-teal-50/40 active:scale-[.99] transition text-left" onclick="wizPilihPeserta(\'' + esc(p.id_peserta) + '\')">' +
-    '<span class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 grid place-items-center font-extrabold text-[11px] shrink-0">' + esc(inisial(p.nama)) + '</span>' +
-    '<span class="flex-1 min-w-0">' +
-    '<span class="block font-bold text-[13px] leading-snug text-slate-800 truncate" title="' + esc(p.nama) + '">' + esc(shortStudentName(p.nama)) + '</span>' +
-    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">No. ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? ' | ' + esc(p.asal_tk) : '') + '</span>' +
+    '<button type="button" role="option" class="participant-option" aria-label="Pilih ' + esc(p.nama) + '" onclick="wizPilihPeserta(\'' + esc(p.id_peserta) + '\')">' +
+    '<span class="participant-avatar">' + esc(inisial(p.nama)) + '</span>' +
+    '<span class="participant-copy">' +
+    '<span class="participant-name" title="' + esc(p.nama) + '">' + esc(shortStudentName(p.nama)) + '</span>' +
+    '<span class="participant-meta" title="' + esc((p.nomor_peserta || '-') + (p.asal_tk ? ' • ' + p.asal_tk : '')) + '"><b>No.</b> ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? '<i>•</i>' + esc(p.asal_tk) : '') + '</span>' +
     '</span>' +
     (p.jumlah_assessment ? '<span class="badge bg-blue-50 text-blue-600 shrink-0">' + p.jumlah_assessment + ' Penilai</span>' : '') +
-    '<svg class="w-4 h-4 text-slate-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
+    '<span class="participant-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>' +
     '</button>').join('');
 }
 function stepDataHtml() {
@@ -329,16 +329,16 @@ function stepDataHtml() {
       const pb = WZ.pesertaBaru || { nama: '', nomor: '', asal_tk: '' };
       html += '<div class="mt-4 grid gap-3">' +
         '<div><label class="label">Nama Peserta Didik *</label>' +
-        '<input id="f-nama" class="input" value="' + esc(pb.nama) + '" oninput="wizField(\'nb_nama\', this.value)" placeholder="Nama lengkap ananda"></div>' +
+        '<input id="f-nama" class="input" value="' + esc(pb.nama) + '" oninput="wizField(\'nb_nama\', this.value)" placeholder="Nama lengkap ananda" readonly></div>' +
         '<div class="grid sm:grid-cols-2 gap-3">' +
-        '<div><label class="label">Nomor Peserta</label><input class="input" value="' + esc(pb.nomor) + '" oninput="wizField(\'nb_nomor\', this.value)" placeholder="Opsional  cth: PPDB-007"></div>' +
-        '<div><label class="label">Asal TK / RA / PAUD</label><input class="input" value="' + esc(pb.asal_tk) + '" oninput="wizField(\'nb_asal_tk\', this.value)" placeholder="Opsional"></div>' +
+        '<div><label class="label">Nomor Peserta</label><input class="input" value="' + esc(pb.nomor) + '" oninput="wizField(\'nb_nomor\', this.value)" placeholder="Opsional  cth: PPDB-007" readonly></div>' +
+        '<div><label class="label">Asal TK / RA / PAUD</label><input class="input" value="' + esc(pb.asal_tk) + '" oninput="wizField(\'nb_asal_tk\', this.value)" placeholder="Opsional" readonly></div>' +
         '</div></div>';
     } else {
       html += '<div class="relative mt-4">' + ic('search', 'w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400') +
         '<label class="sr-only" for="peserta-q">Cari peserta terdaftar</label>' +
         '<input id="peserta-q" class="input pad-icon" placeholder="Cari nama / nomor peserta..." aria-label="Cari peserta terdaftar" oninput="wizSearchPeserta(this.value)"></div>' +
-        '<div id="peserta-list" role="listbox" aria-label="Daftar peserta" class="mt-3 grid gap-2 max-h-80 overflow-y-auto pr-1">' + pesertaListHtml('') + '</div>';
+        '<div id="peserta-list" role="listbox" aria-label="Daftar peserta" class="peserta-picker-list mt-3 grid gap-2.5 pr-1">' + pesertaListHtml('') + '</div>';
     }
   }
   html += '</div>';
@@ -352,8 +352,8 @@ function stepDataHtml() {
       '</div><p class="text-[11px] text-slate-400 mt-3">Data peserta & assessor diatur oleh pembuat assessment / Koordinator/Admin.</p>';
   } else {
     html += '<div class="mt-4 grid sm:grid-cols-2 gap-3">' +
-      '<div><label class="label">Assessor (Pembuat) *</label><input class="input" value="' + esc(WZ.creator) + '" oninput="wizField(\'creator\', this.value)" placeholder="Ust./Ustzh. ..."></div>' +
-      '<div><label class="label">Tanggal Assessment *</label><input type="date" class="input" value="' + esc(WZ.tanggal) + '" oninput="wizField(\'tanggal\', this.value)"></div>' +
+      '<div><label class="label">Assessor (Pembuat) *</label><input class="input" value="' + esc(WZ.creator) + '" oninput="wizField(\'creator\', this.value)" placeholder="Ust./Ustzh. ..." readonly></div>' +
+      '<div><label class="label">Tanggal Assessment *</label><input type="date" class="input" value="' + esc(WZ.tanggal) + '" oninput="wizField(\'tanggal\', this.value)" readonly></div>' +
       '</div><p class="text-[11px] text-slate-400 mt-3">Kolom * wajib sebelum menyimpan.</p>';
   }
   html += '</div>';

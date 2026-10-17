@@ -66,6 +66,52 @@ summary::-webkit-details-marker { color: #94a3b8; }
 
 body.in-wizard #bottomnav { display: none; }
 
+/* Pemilih peserta: tiap siswa menjadi kartu mandiri supaya informasi mudah
+   dipindai dan tidak bertumpuk dengan panel aksi wizard di layar ponsel. */
+.peserta-picker-list {
+  min-height: 8rem;
+  max-height: min(20rem, calc(100dvh - 25rem));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.participant-option {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  width: 100%;
+  min-width: 0;
+  padding: .7rem .75rem;
+  text-align: left;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  background: #fff;
+  box-shadow: 0 1px 2px rgb(15 23 42 / .03);
+  transition: border-color .15s ease, background .15s ease, transform .15s ease;
+}
+.participant-option:hover { border-color: #5eead4; background: #f0fdfa; }
+.participant-option:active { transform: scale(.99); }
+.participant-avatar {
+  display: grid;
+  place-items: center;
+  flex: 0 0 2.35rem;
+  width: 2.35rem;
+  height: 2.35rem;
+  border-radius: .8rem;
+  background: #ccfbf1;
+  color: #0f766e;
+  font-size: .68rem;
+  font-weight: 900;
+}
+.participant-copy { flex: 1 1 auto; min-width: 0; }
+.participant-name, .participant-meta { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.participant-name { color: #1e293b; font-size: .8rem; font-weight: 800; line-height: 1.25; }
+.participant-meta { margin-top: .2rem; color: #94a3b8; font-size: .65rem; line-height: 1.25; }
+.participant-meta b { color: #64748b; font-weight: 800; }
+.participant-meta i { margin: 0 .25rem; font-style: normal; }
+.participant-arrow { display: grid; place-items: center; flex: 0 0 1.65rem; width: 1.65rem; height: 1.65rem; border-radius: 999px; background: #f1f5f9; color: #94a3b8; }
+.participant-arrow svg { width: .85rem; height: .85rem; }
+@media (min-width: 640px) { .peserta-picker-list { max-height: 20rem; } }
+
 /* Modal ganti siswa: daftar tetap dapat digulir tanpa membuat dialog
    melampaui layar pendek, terutama saat keyboard ponsel terbuka. */
 .modal-switcher {
