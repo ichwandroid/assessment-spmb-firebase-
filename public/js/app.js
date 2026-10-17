@@ -1,4 +1,4 @@
-﻿/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HELPER DASAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
+/* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• HELPER DASAR â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
 const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -40,7 +40,11 @@ const ICONS = {
   info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
   star: '<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>',
   save: '<path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/>',
-  /* Ikon sentra â€” nama harus sama dengan `ikon` di FORM_SCHEMA (Config.gs).
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  upload: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>',
+  play: '<polygon points="5 3 19 12 5 21 5 3"/>',
+  file: '<path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/>',
+  /* Ikon sentra — nama harus sama dengan `ikon` di FORM_SCHEMA (Config.gs).
    * Sebelumnya 'moon'/'book'/'palette' tidak terdaftar sehingga SEMUA sentra
    * tampil dengan ikon fallback 'info'. */
   moon: '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>',
@@ -64,7 +68,13 @@ const Auth = {
   isAdmin() { return !!(this.user && this.user.role === 'ADMIN'); },
   isKoord() { return !!(this.user && this.user.role === 'KOORDINATOR'); },
   isStaff() { return !!(this.user && (this.user.role === 'ADMIN' || this.user.role === 'KOORDINATOR')); },
-  canEditSentra(sid) { return this.isStaff() || !!(this.user && (this.user.assignments || []).indexOf(sid) >= 0); },
+  canEditSentra(sid) {
+    if (this.isStaff()) return true;
+    if (!this.user) return false;
+    const asg = this.user.assignments || [];
+    if (asg.length === 0) return true;
+    return asg.indexOf(sid) >= 0;
+  },
   editableSentras() { return (state.schema ? state.schema.sentra : []).filter(s => this.canEditSentra(s.id)); }
 };
 
@@ -106,7 +116,7 @@ async function doLogin() {
   const p = $('#li-pin').value;
   const note = $('#li-note');
   if (!u || !p) { note.textContent = 'Isi username dan PIN.'; return; }
-  const btn = $('#li-btn'); setBtnLoading(btn, true, 'Memeriksaâ€¦');
+  const btn = $('#li-btn'); setBtnLoading(btn, true, 'Memeriksa!...');
   try {
     const res = await apiNoAuth('login', u, p);
     Auth.save(res.token);
@@ -117,7 +127,7 @@ async function doLogin() {
     applyBranding();
     enterApp();
     if (pinPending()) showPinGate();
-    else toast('Selamat datang, ' + Auth.user.nama + ' ðŸ‘‹', 'success');
+    else toast('Selamat datang, ' + Auth.user.nama + ' !', 'success');
   } catch (e) {
     setBtnLoading(btn, false);
     note.textContent = e.message;
@@ -144,7 +154,7 @@ function enterApp() {
   }
   goView(Auth.isStaff() ? 'dashboard' : 'riwayat');
 }
-/* Identitas sekolah/tahun pelajaran selalu dari CONFIG sheet â€” jangan hardcode
+/* Identitas sekolah/tahun pelajaran selalu dari CONFIG sheet  jangan hardcode
  * di HTML, karena operator bisa mengubahnya tanpa deploy ulang. */
 function applyBranding() {
   if (state.config) {
@@ -175,7 +185,7 @@ async function refreshData() {
     const res = await api('getInitialData');
     Auth.user = res.user;
     state.peserta = res.peserta; state.riwayat = res.riwayat;
-    /* Dashboard dihitung on-demand (getDashboardData), bukan ikut bootstrap â€”
+    /* Dashboard dihitung on-demand (getDashboardData), bukan ikut bootstrap 
      * sebelumnya getDashboardData tidak pernah dipanggil sehingga kartu
      * "Tugas Menunggu Penilaian" selalu kosong dan komentarnya dinonaktifkan. */
     state.dashboard = Auth.isStaff() ? await loadDashboardData_() : null;
@@ -233,7 +243,7 @@ function modalClose() {
   else root.innerHTML = '';
   if (back && typeof back.focus === 'function') { try { back.focus(); } catch (e) {} }
 }
-/* Esc menutup modal â€” sebelumnya hanya klik area gelap. */
+/* Esc menutup modal  sebelumnya hanya klik area gelap. */
 document.addEventListener('keydown', e => {
   if (e.key !== 'Escape') return;
   const root = $('#modal-root');
@@ -280,7 +290,7 @@ async function submitPinChange(ov) {
   if (n1 !== n2) { note.textContent = 'Ulangi PIN baru dengan tepat.'; return; }
   if (n1 === oldPin) { note.textContent = 'PIN baru harus berbeda dari PIN lama.'; return; }
   const btn = ov.querySelector('#pg-save');
-  setBtnLoading(btn, true, 'Menyimpanâ€¦');
+  setBtnLoading(btn, true, 'Menyimpan...');
   try {
     const res = await api('changeMyPin', oldPin, n1);
     Auth.user = res.user;
@@ -311,7 +321,7 @@ function confirmModal(o) {
 }
 function setBtnLoading(btn, on, label) {
   if (!btn) return;
-  if (on) { btn.dataset.orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = SPIN_SVG + ' ' + (label || 'Memprosesâ€¦'); }
+  if (on) { btn.dataset.orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = SPIN_SVG + ' ' + (label || 'Memproses...'); }
   else { btn.disabled = false; if (btn.dataset.orig) btn.innerHTML = btn.dataset.orig; }
 }
 
@@ -323,11 +333,14 @@ function animateIn() {
 function goView(name, param) {
   if (!Auth.user) return;
   if (name === 'dashboard' && !Auth.isStaff()) name = 'riwayat';
+  if (name === 'peserta' && !Auth.isStaff()) name = 'riwayat';
   if (name === 'pengguna' && !Auth.isAdmin()) name = 'riwayat';
+  if (name === 'soal' && !Auth.isAdmin()) name = 'riwayat';
   state.view = name;
   $$('.navlink, .botnav').forEach(b => { if (b.dataset.view) b.classList.toggle('on', b.dataset.view === name); });
   if (name === 'dashboard') showDashboard();
   else if (name === 'riwayat') showRiwayat();
+  else if (name === 'peserta') showPeserta();
   else if (name === 'pengguna') showPengguna();
   else if (name === 'soal') showSoal();
   else if (name === 'hasil') showHasil(param);
@@ -434,7 +447,7 @@ function barColor(r) {
 }
 function kodeRuleText() {
   const k = state.config.kode;
-  return 'Dihitung dari rerata Calistung (2.1 Membaca, 2.2 Menulis/Dikte, 2.3 Berhitung' + (k.includeEnglish ? ', 2.4 English' : '') + ') â€” A â‰¥ ' + k.aMin + ' â€¢ B â‰¥ ' + k.bMin + ' â€¢ C < ' + k.bMin;
+  return 'Dihitung dari rerata Calistung (2.1 Membaca, 2.2 Menulis/Dikte, 2.3 Berhitung' + (k.includeEnglish ? ', 2.4 English' : '') + ')  A â‰¥ ' + k.aMin + ' | B â‰¥ ' + k.bMin + ' | C < ' + k.bMin;
 }
 function statusBadge(st) {
   if (st === 'SUBMITTED') return '<span class="badge bg-emerald-50 text-emerald-600">' + ic('check', 'w-3.5 h-3.5') + ' Selesai</span>';
@@ -448,11 +461,11 @@ function kodeBadge(k) {
 function sentraChips(ss) {
   const map = state.schema.sentra.map(s => [s.id, (s.singkat || s.nama).charAt(0).toUpperCase(), s.nama]);
   return '<span class="flex gap-1 shrink-0">' + map.map(x =>
-    '<span title="' + x[2] + (ss && ss[x[0]] === 'FINAL' ? ' â€” final' : '') + '" class="w-5 h-5 rounded-md grid place-items-center text-[10px] font-extrabold ' +
+    '<span title="' + x[2] + (ss && ss[x[0]] === 'FINAL' ? '  final' : '') + '" class="w-5 h-5 rounded-md grid place-items-center text-[10px] font-extrabold ' +
     (ss && ss[x[0]] === 'FINAL' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-400') + '">' + x[1] + '</span>').join('') + '</span>';
 }
 function spinnerHtml(text) {
-  return '<div class="py-20 text-center text-slate-400">' + SPIN_SVG.replace('class="animate-spin w-5 h-5"', 'class="animate-spin w-8 h-8 mx-auto text-teal-500"') + '<p class="mt-3 text-sm font-bold">' + esc(text || 'Memuatâ€¦') + '</p></div>';
+  return '<div class="py-20 text-center text-slate-400">' + SPIN_SVG.replace('class="animate-spin w-5 h-5"', 'class="animate-spin w-8 h-8 mx-auto text-teal-500"') + '<p class="mt-3 text-sm font-bold">' + esc(text || 'Memuat...') + '</p></div>';
 }
 function errorHtml(msg) {
   return '<div class="card p-6 text-center text-rose-500 anim-in">' + ic('alert', 'w-8 h-8 mx-auto') + '<p class="mt-2 font-bold text-sm">' + esc(msg) + '</p></div>';
@@ -481,9 +494,9 @@ function renderDashboard() {
     '<div class="absolute -top-20 -right-16 w-64 h-64 rounded-full bg-white/10"></div>' +
     '<div class="absolute -bottom-24 -left-12 w-64 h-64 rounded-full bg-emerald-300/20"></div>' +
     '<div class="relative">' +
-    '<p class="text-white/80 text-[11px] sm:text-xs font-extrabold uppercase tracking-widest">' + esc(state.config.sekolah) + ' â€¢ TP ' + esc(state.config.tahunPelajaran) + '</p>' +
+    '<p class="text-white/80 text-[11px] sm:text-xs font-extrabold uppercase tracking-widest">' + esc(state.config.sekolah) + ' | TP ' + esc(state.config.tahunPelajaran) + '</p>' +
     '<h2 class="mt-2 text-2xl sm:text-3xl font-extrabold leading-tight">Dashboard Koordinator</h2>' +
-    '<p class="mt-2 text-white/85 text-sm max-w-xl leading-relaxed">Pantau progres assessment tiap sentra dan lakukan Submit Final â€” laporan ditandatangani atas nama Anda.</p>' +
+    '<p class="mt-2 text-white/85 text-sm max-w-xl leading-relaxed">Pantau progres assessment tiap sentra dan lakukan Submit Final  laporan ditandatangani atas nama Anda.</p>' +
     '<div class="mt-5 flex flex-wrap gap-3">' +
     '<button onclick="wizardStart()" class="btn-glass !bg-white !text-teal-700 !border-transparent hover:!bg-teal-50 font-extrabold">' + ic('plus', 'w-4 h-4') + ' Assessment Baru</button>' +
     (Auth.isAdmin() ? '<button onclick="goView(\'pengguna\')" class="btn-glass">' + ic('users', 'w-4 h-4') + ' Kelola Pengguna</button>' : '') +
@@ -552,7 +565,7 @@ function pendingRow(label, info) {
     '<span class="w-10 h-10 shrink-0 rounded-xl ' + (info.count ? 'bg-amber-50 text-amber-600' : 'bg-slate-100 text-slate-400') + ' grid place-items-center font-extrabold text-sm">' + info.count + '</span>' +
     '<div class="flex-1 min-w-0">' +
     '<p class="font-bold text-sm text-slate-700 truncate">' + esc(label) + '</p>' +
-    '<p class="text-[11px] text-slate-400 truncate mt-0.5">Penugas: ' + esc(info.assessor || 'â€” belum ada â€”') + '</p>' +
+    '<p class="text-[11px] text-slate-400 truncate mt-0.5">Penugas: ' + esc(info.assessor || ' belum ada ') + '</p>' +
     '</div></div>';
 }
 
@@ -564,7 +577,7 @@ function readyListHtml() {
     '<span class="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 grid place-items-center shrink-0 font-extrabold text-xs">' + esc(inisial(r.nama)) + '</span>' +
     '<div class="flex-1 min-w-0">' +
     '<p class="font-bold text-sm text-slate-800 truncate">' + esc(r.nama) + '</p>' +
-    '<p class="text-[11px] text-slate-400 truncate mt-0.5">' + esc(r.creator) + ' â€¢ ' + fmtTanggal(r.tanggal) + '</p>' +
+    '<p class="text-[11px] text-slate-400 truncate mt-0.5">' + esc(r.creator) + ' | ' + fmtTanggal(r.tanggal) + '</p>' +
     '</div>' +
     '<button class="btn-primary !px-3 !py-2 !text-xs shrink-0" data-act="submit" data-id="' + esc(r.id) + '" title="Submit Final">' + ic('check', 'w-4 h-4') + '<span class="hide-xs">Submit</span></button>' +
     '</div>').join('') + '</div>';
@@ -594,7 +607,7 @@ function recentHtml() {
     '<span class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 grid place-items-center shrink-0 font-extrabold text-xs">' + esc(inisial(r.nama)) + '</span>' +
     '<span class="flex-1 min-w-0">' +
     '<span class="block font-bold text-sm text-slate-800 truncate">' + esc(r.nama) + '</span>' +
-    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">' + esc(r.creator) + ' â€¢ ' + fmtTanggal(r.tanggal) + '</span>' +
+    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">' + esc(r.creator) + ' | ' + fmtTanggal(r.tanggal) + '</span>' +
     '</span>' +
     '<span class="flex flex-col items-end gap-1 shrink-0">' +
     statusBadge(r.status) + (r.kode ? kodeBadge(r.kode) : '') +
@@ -611,7 +624,7 @@ function showRiwayat() {
     '<div class="card p-4 mt-4 anim-in">' +
     '<div class="relative">' + ic('search', 'w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400') +
     '<input id="rq" class="input pad-icon" placeholder="Cari nama / nomor / pembuat..." value="' + esc(state.rQuery) + '"></div>' +
-    (Auth.isAdmin() ? '<div class="mt-3"><label for="r-user-filter" class="label">Lihat assessment berdasarkan pengguna</label><select id="r-user-filter" class="input"><option value="ALL">Semua pengguna</option>' + (state.reviewUsers || []).map(u => '<option value="' + esc(u.username) + '" ' + (state.rUser === u.username ? 'selected' : '') + '>' + esc(u.nama + ' Â· ' + u.username) + '</option>').join('') + '</select><p class="text-[11px] text-slate-400 mt-1">Termasuk assessment yang dibuat atau dikerjakan pengguna pada salah satu sentra.</p></div>' : '') +
+    (Auth.isAdmin() ? '<div class="mt-3"><label for="r-user-filter" class="label">Lihat assessment berdasarkan pengguna</label><select id="r-user-filter" class="input"><option value="ALL">Semua pengguna</option>' + (state.reviewUsers || []).map(u => '<option value="' + esc(u.username) + '" ' + (state.rUser === u.username ? 'selected' : '') + '>' + esc(u.nama + '  ' + u.username) + '</option>').join('') + '</select><p class="text-[11px] text-slate-400 mt-1">Termasuk assessment yang dibuat atau dikerjakan pengguna pada salah satu sentra.</p></div>' : '') +
     '<div class="flex gap-2 mt-3 flex-wrap">' +
     [['ALL', 'Semua'], ['DRAFT', 'Draft'], ['SIAP_REVIEW', 'Siap Review'], ['SUBMITTED', 'Selesai']].map(f =>
       '<button class="chip-filter ' + (state.rFilter === f[0] ? 'on' : '') + '" data-rf="' + f[0] + '">' + f[1] + '</button>').join('') +
@@ -657,8 +670,8 @@ function riwayatCard(it) {
     '<div class="flex-1 min-w-0">' +
     '<div class="flex items-center gap-2 flex-wrap">' +
     '<p class="font-extrabold text-slate-800">' + esc(it.nama) + '</p>' + statusBadge(it.status) + (it.kode ? kodeBadge(it.kode) : '') + sentraChips(it.sentraStatus) + '</div>' +
-    '<p class="text-xs text-slate-500 mt-0.5">No. ' + esc(it.nomor || '-') + ' â€¢ ' + esc(it.creator) + ' â€¢ ' + fmtTanggal(it.tanggal) +
-    (it.status !== 'SUBMITTED' ? ' â€¢ diubah ' + esc(it.updated || '') : (it.nilai_akhir != null ? ' â€¢ Nilai akhir ' + it.nilai_akhir : '')) + '</p>' +
+    '<p class="text-xs text-slate-500 mt-0.5">No. ' + esc(it.nomor || '-') + ' | ' + esc(it.creator) + ' | ' + fmtTanggal(it.tanggal) +
+    (it.status !== 'SUBMITTED' ? ' | diubah ' + esc(it.updated || '') : (it.nilai_akhir != null ? ' | Nilai akhir ' + it.nilai_akhir : '')) + '</p>' +
     (mine.length && !staff ? '<p class="mt-1"><span class="badge bg-amber-100 text-amber-700">' + ic('alert', 'w-3 h-3') + ' Menunggu Anda: ' + esc(mineTxt) + '</span></p>' : '') +
     ((it.handledByOther || []).length && !staff ? '<p class="mt-1"><span class="badge bg-slate-200 text-slate-600">' + ic('lock', 'w-3 h-3') + ' ' + esc(it.handledByOther.map(x => sentraName(x.sid) + ': ' + x.ownerName).join(', ')) + '</span></p>' : '') +
     '</div>' +
@@ -675,7 +688,7 @@ function riwayatCard(it) {
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: PENGGUNA (ADMIN) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 async function showPengguna() {
   if (!Auth.isAdmin()) { goView('riwayat'); return; }
-  setView(spinnerHtml('Memuat daftar penggunaâ€¦'));
+  setView(spinnerHtml('Memuat daftar pengguna...'));
   try {
     const res = await api('getUsers');
     state.users = res.users;
@@ -687,7 +700,11 @@ function renderUsers() {
     '<div class="anim-in flex items-center justify-between gap-3 flex-wrap">' +
     '<div><h2 class="text-xl font-extrabold text-slate-800">Pengguna & Penugasan</h2>' +
     '<p class="text-sm text-slate-500 mt-0.5">Assessor menilai sesuai penugasan; Koordinator submit final & menandatangani laporan</p></div>' +
-    '<button class="btn-primary !py-2.5" onclick="userModal()">' + ic('plus', 'w-4 h-4') + ' Pengguna Baru</button></div>' +
+    '<div class="flex items-center gap-2 flex-wrap">' +
+    '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="downloadTemplateAssessor()">' + ic('download', 'w-4 h-4') + ' Template CSV</button>' +
+    '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="uploadAssessorModal()">' + ic('upload', 'w-4 h-4') + ' Upload CSV</button>' +
+    '<button class="btn-primary !py-2 !px-3.5 !text-xs" onclick="userModal()">' + ic('plus', 'w-4 h-4') + ' Pengguna Baru</button>' +
+    '</div></div>' +
     '<div class="mt-4 grid gap-3">' + (state.users.length ? state.users.map(userCard).join('') :
       '<div class="card p-10 text-center text-slate-400">Belum ada pengguna.</div>') + '</div>');
 }
@@ -704,7 +721,7 @@ function userCard(u) {
     '<span class="badge ' + ri[1] + '">' + ri[0] + '</span>' +
     (u.aktif ? '' : '<span class="badge bg-slate-200 text-slate-500">Nonaktif</span>') +
     (u.pinHarusDiganti ? '<span class="badge bg-amber-50 text-amber-700">' + ic('lock', 'w-3 h-3') + ' Wajib ganti PIN</span>' : '') +
-    (u.pinDefault ? '<span class="badge bg-rose-50 text-rose-600">' + ic('alert', 'w-3 h-3') + ' PIN default â€” ganti!</span>' : '') +
+    (u.pinDefault ? '<span class="badge bg-rose-50 text-rose-600">' + ic('alert', 'w-3 h-3') + ' PIN default  ganti!</span>' : '') +
     '</div>' +
     '<p class="text-xs text-slate-500 mt-0.5">@' + esc(u.username) + '</p>' +
     '<div class="mt-1.5 flex gap-1.5 flex-wrap">' + asgChips + '</div></div>' +
@@ -719,7 +736,7 @@ function userCard(u) {
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: KELOLA SOAL ASSESSMENT (ADMIN) â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 async function showSoal() {
   if (!Auth.isAdmin()) { goView('riwayat'); return; }
-  setView(spinnerHtml('Memuat daftar soalâ€¦'));
+  setView(spinnerHtml('Memuat daftar soal...'));
   try {
     const res = await api('getInitialData');
     state.schema = res.schema;
@@ -746,7 +763,7 @@ function questionModal(sid, mid, iid) {
     const nama = ov.querySelector('#qf-nama').value.trim();
     if (!nama) { toast('Teks soal wajib diisi.', 'error'); return; }
     if (guardPin()) return;
-    const btn = ov.querySelector('#qf-save'); setBtnLoading(btn, true, 'Menyimpanâ€¦');
+    const btn = ov.querySelector('#qf-save'); setBtnLoading(btn, true, 'Menyimpan...');
     try {
       const res = await api('saveAssessmentQuestion', { action: edit ? 'edit' : 'add', sentraId: sid, materiId: mid, itemId: iid || '', nama: nama });
       state.schema = res.schema;
@@ -766,7 +783,7 @@ function rubricModal(sid, mid) {
     if (!criteria.some(x => x.key === key)) criteria.push({ key: key, nama: a.nama, itemNama: it.aspek ? it.nama : '' });
   }));
   const scoreFields = ['3', '2', '1'].map(score => '<div class="rounded-xl border border-slate-100 p-3"><div class="grid grid-cols-[64px_1fr] gap-2 items-center"><span class="badge bg-teal-50 text-teal-700">Skor ' + score + '</span><input class="input !py-2" id="rf-label-' + score + '" maxlength="50" value="' + esc(labels[score]) + '" placeholder="Label skor"></div>' + (m.tipe === 'tunggal' ? '<textarea class="input mt-2 min-h-16" id="rf-desc-' + score + '" maxlength="500" placeholder="Deskripsi kriteria skor ' + score + '">' + esc(rubric[score] || '') + '</textarea>' : '') + '</div>').join('');
-  const aspectFields = criteria.map((c, ci) => '<div class="rounded-xl border border-slate-200 p-3"><p class="text-xs font-extrabold text-slate-700 mb-2">' + (c.itemNama ? esc(c.itemNama) + ' Â· ' : '') + esc(c.nama) + '</p><div class="grid sm:grid-cols-3 gap-2">' + ['3', '2', '1'].map(score => '<label class="text-[10px] font-bold text-slate-500">Skor ' + score + '<textarea class="input mt-1 min-h-16 !text-xs" id="rf-a-' + ci + '-' + score + '" maxlength="500" placeholder="Kriteria skor ' + score + '">' + esc((aspectRubric[c.key] || {})[score] || '') + '</textarea></label>').join('') + '</div></div>').join('');
+  const aspectFields = criteria.map((c, ci) => '<div class="rounded-xl border border-slate-200 p-3"><p class="text-xs font-extrabold text-slate-700 mb-2">' + (c.itemNama ? esc(c.itemNama) + '  ' : '') + esc(c.nama) + '</p><div class="grid sm:grid-cols-3 gap-2">' + ['3', '2', '1'].map(score => '<label class="text-[10px] font-bold text-slate-500">Skor ' + score + '<textarea class="input mt-1 min-h-16 !text-xs" id="rf-a-' + ci + '-' + score + '" maxlength="500" placeholder="Kriteria skor ' + score + '">' + esc((aspectRubric[c.key] || {})[score] || '') + '</textarea></label>').join('') + '</div></div>').join('');
   const ov = modalOpen('<h3 class="text-lg font-extrabold text-slate-800">Rubrik Penilaian</h3><p class="text-xs text-slate-500 mt-1">' + esc(m.no + ' ' + m.nama) + '</p><div class="mt-4"><label class="label">Label tingkat skor</label><div class="grid gap-2">' + scoreFields + '</div></div>' + (criteria.length ? '<div class="mt-4"><label class="label">Kriteria per aspek</label><p class="text-[11px] text-slate-400 mb-2">Isi deskripsi untuk setiap skor. Kolom dikelompokkan per kriteria di tampilan assessor.</p><div class="grid gap-2">' + aspectFields + '</div></div>' : '') + '<div class="mt-3"><label class="label">Pedoman penilaian (satu pedoman per baris)</label><textarea id="rf-pedoman" class="input min-h-28" maxlength="6000" placeholder="Tuliskan panduan untuk assessor">' + esc((m.pedoman || []).join('\n')) + '</textarea></div><div class="mt-4 grid grid-cols-2 gap-3"><button id="rf-cancel" class="btn-soft">Batal</button><button id="rf-save" class="btn-primary">Simpan Rubrik</button></div>');
   ov.querySelector('#rf-cancel').onclick = () => modalClose();
   ov.querySelector('#rf-save').onclick = async () => {
@@ -774,7 +791,7 @@ function rubricModal(sid, mid) {
     ['3', '2', '1'].forEach(score => { labelNilai[score] = ov.querySelector('#rf-label-' + score).value.trim(); rubrikNilai[score] = ov.querySelector('#rf-desc-' + score).value.trim(); });
     if (['3', '2', '1'].some(score => !labelNilai[score])) { toast('Label untuk skor 3, 2, dan 1 wajib diisi.', 'error'); return; }
     if (guardPin()) return;
-    const btn = ov.querySelector('#rf-save'); setBtnLoading(btn, true, 'Menyimpanâ€¦');
+    const btn = ov.querySelector('#rf-save'); setBtnLoading(btn, true, 'Menyimpan...');
     try {
       const rubrikAspek = {};
       criteria.forEach((c, ci) => { rubrikAspek[c.key] = {}; ['3', '2', '1'].forEach(score => { rubrikAspek[c.key][score] = ov.querySelector('#rf-a-' + ci + '-' + score).value.trim(); }); });
@@ -789,7 +806,7 @@ function userModal(u) {
   const cbs = state.schema.sentra.map(s =>
     '<label class="flex items-center gap-3 p-3 rounded-xl border border-slate-200 cursor-pointer hover:border-teal-300 transition">' +
     '<input type="checkbox" class="uf-asg w-5 h-5 accent-teal-600" value="' + s.id + '" ' + (asg.indexOf(s.id) >= 0 ? 'checked' : '') + '>' +
-    '<span class="text-sm font-bold text-slate-700">' + s.bab + ' â€” ' + esc(s.nama) + '</span></label>').join('');
+    '<span class="text-sm font-bold text-slate-700">' + s.bab + '  ' + esc(s.nama) + '</span></label>').join('');
   const ov = modalOpen(
     '<h3 class="text-lg font-extrabold text-slate-800 text-center">' + (edit ? 'Edit Pengguna' : 'Pengguna Baru') + '</h3>' +
     '<div class="mt-4 grid gap-3 text-left">' +
@@ -797,9 +814,9 @@ function userModal(u) {
     '<div><label class="label">Nama Lengkap</label><input id="uf-nama" class="input" value="' + esc(edit ? u.nama : '') + '" placeholder="cth: Ust. Abdullah Hakim"></div>' +
     '<div><label class="label">PIN (4-12 digit)</label><input id="uf-pin" class="input" inputmode="numeric" placeholder="' + (edit ? 'Kosongkan jika tidak diganti' : 'PIN baru') + '"></div>' +
     '<div><label class="label">Peran</label><select id="uf-role" class="input">' +
-    '<option value="ASSESSOR" ' + (edit && u.role === 'ASSESSOR' ? 'selected' : '') + '>Assessor â€” menilai sesuai penugasan</option>' +
-    '<option value="KOORDINATOR" ' + (edit && u.role === 'KOORDINATOR' ? 'selected' : '') + '>Koordinator â€” review, submit final & ttd laporan</option>' +
-    '<option value="ADMIN" ' + (edit && u.role === 'ADMIN' ? 'selected' : '') + '>Admin â€” akses penuh + kelola pengguna</option></select></div>' +
+    '<option value="ASSESSOR" ' + (edit && u.role === 'ASSESSOR' ? 'selected' : '') + '>Assessor  menilai sesuai penugasan</option>' +
+    '<option value="KOORDINATOR" ' + (edit && u.role === 'KOORDINATOR' ? 'selected' : '') + '>Koordinator  review, submit final & ttd laporan</option>' +
+    '<option value="ADMIN" ' + (edit && u.role === 'ADMIN' ? 'selected' : '') + '>Admin  akses penuh + kelola pengguna</option></select></div>' +
     '<div><label class="label">Penugasan Sentra (BAB)</label>' +
     '<p class="text-[11px] text-slate-400 mb-2">Wajib untuk Assessor; opsional untuk Koordinator/Admin.</p>' +
     '<div class="grid gap-2">' + cbs + '</div></div>' +
@@ -824,7 +841,7 @@ function userModal(u) {
     if (payload.role === 'ASSESSOR' && !payload.assignments.length) { toast('Assessor minimal ditugaskan 1 sentra.', 'error'); return; }
     if (guardPin()) return;
     const btn = ov.querySelector('#uf-save');
-    setBtnLoading(btn, true, 'Menyimpanâ€¦');
+    setBtnLoading(btn, true, 'Menyimpan...');
     try {
       const res = await api('saveUser', payload);
       state.users = res.users;
@@ -835,9 +852,592 @@ function userModal(u) {
   };
 }
 
+/* ════════════════ CSV & IMPORT UTILITIES ════════════════ */
+function downloadCsv(filename, rows) {
+  let csvContent = '\uFEFF'; // UTF-8 BOM
+  if (Array.isArray(rows)) {
+    csvContent += rows.map(row => {
+      return row.map(val => {
+        let v = String(val == null ? '' : val).replace(/"/g, '""');
+        return /[",\r\n;]/.test(v) ? `"${v}"` : v;
+      }).join(',');
+    }).join('\r\n');
+  } else if (typeof rows === 'string') {
+    csvContent += rows;
+  }
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function parseCsv(text) {
+  text = String(text || '').replace(/^\uFEFF/, '').trim();
+  if (!text) return [];
+
+  const firstLine = text.split(/\r?\n/)[0] || '';
+  let delimiter = ',';
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const semiCount = (firstLine.match(/;/g) || []).length;
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  if (semiCount > commaCount && semiCount > tabCount) delimiter = ';';
+  else if (tabCount > commaCount && tabCount > semiCount) delimiter = '\t';
+
+  const rows = [];
+  let currentRow = [];
+  let currentField = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i];
+    const nextChar = text[i + 1];
+
+    if (char === '"') {
+      if (inQuotes && nextChar === '"') {
+        currentField += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+    } else if (char === delimiter && !inQuotes) {
+      currentRow.push(currentField.trim());
+      currentField = '';
+    } else if ((char === '\r' || char === '\n') && !inQuotes) {
+      if (char === '\r' && nextChar === '\n') i++;
+      currentRow.push(currentField.trim());
+      if (currentRow.some(c => c.length > 0)) {
+        rows.push(currentRow);
+      }
+      currentRow = [];
+      currentField = '';
+    } else {
+      currentField += char;
+    }
+  }
+
+  if (currentField.length > 0 || currentRow.length > 0) {
+    currentRow.push(currentField.trim());
+    if (currentRow.some(c => c.length > 0)) {
+      rows.push(currentRow);
+    }
+  }
+
+  if (rows.length < 2) return [];
+
+  const headers = rows[0].map(h => h.trim().toLowerCase().replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, ''));
+  const results = [];
+  for (let r = 1; r < rows.length; r++) {
+    const row = rows[r];
+    const obj = {};
+    let hasValue = false;
+    headers.forEach((h, idx) => {
+      const val = row[idx] != null ? row[idx].trim() : '';
+      if (val) hasValue = true;
+      obj[h] = val;
+    });
+    if (hasValue) results.push(obj);
+  }
+  return results;
+}
+
+/* ════════════════ TEMPLATE & IMPORT ASSESSOR ════════════════ */
+function downloadTemplateAssessor() {
+  const headers = ['username', 'nama', 'role', 'pin', 'assignments'];
+  const rows = [
+    headers,
+    ['ustfulan', 'Ust. Fulan Al-Hafizh', 'ASSESSOR', '1234', 'ubudiyah'],
+    ['ustazahb', 'Ustzh. Sarah Mahmud', 'ASSESSOR', '1234', 'persiapan;seni'],
+    ['koor_spmb', 'Ust. Rahmat Hidayat', 'KOORDINATOR', '1234', ''],
+    ['admin_spmb', 'Admin Sekolah', 'ADMIN', '1234', '']
+  ];
+  downloadCsv('template_assessor.csv', rows);
+}
+
+let pendingAssessorList = [];
+
+function uploadAssessorModal() {
+  if (!Auth.isAdmin()) return;
+  pendingAssessorList = [];
+
+  const sentraListStr = (state.schema && state.schema.sentra)
+    ? state.schema.sentra.map(s => s.id).join(', ')
+    : 'ubudiyah, persiapan, seni, motorik, bahasa, kematangan';
+
+  const ov = modalOpen(
+    '<div>' +
+    '<div class="flex items-center gap-3 mb-4">' +
+    '<div class="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 grid place-items-center shrink-0">' + ic('upload', 'w-5 h-5') + '</div>' +
+    '<div><h3 class="text-lg font-extrabold text-slate-800">Upload Assessor & Pengguna</h3>' +
+    '<p class="text-xs text-slate-500">Import akun massal dari file CSV</p></div></div>' +
+
+    '<div class="rounded-2xl bg-slate-50 border border-slate-200/70 p-3.5 text-xs text-slate-600 mb-4">' +
+    '<p class="font-bold text-slate-700 mb-1">Ketentuan Format CSV:</p>' +
+    '<ul class="list-disc pl-4 space-y-0.5">' +
+    '<li>Header wajib: <b>username, nama, role, pin, assignments</b></li>' +
+    '<li>Peran (role): <code>ASSESSOR</code>, <code>KOORDINATOR</code>, atau <code>ADMIN</code></li>' +
+    '<li>PIN default jika kosong: <code>1234</code></li>' +
+    '<li>Kode sentra penugasan: <code>' + esc(sentraListStr) + '</code> (pisahkan dengan tanda koma atau titik koma)</li>' +
+    '</ul>' +
+    '</div>' +
+
+    '<div class="mb-4">' +
+    '<label class="block text-center p-6 border-2 border-dashed border-teal-200 hover:border-teal-400 rounded-2xl bg-teal-50/30 cursor-pointer transition">' +
+    ic('file', 'w-8 h-8 text-teal-500 mx-auto mb-2') +
+    '<span class="block text-xs font-bold text-teal-700">Pilih File CSV Assessor</span>' +
+    '<span class="block text-[11px] text-slate-400 mt-0.5">atau drag & drop file ke sini (.csv)</span>' +
+    '<input type="file" id="as-csv-file" accept=".csv,text/csv,text/plain" class="hidden">' +
+    '</label>' +
+    '</div>' +
+
+    '<div id="as-preview-wrap" class="hidden mb-4">' +
+    '<div class="flex justify-between items-center mb-1.5">' +
+    '<span id="as-preview-stat" class="text-xs font-bold text-slate-700"></span>' +
+    '</div>' +
+    '<div class="max-h-48 overflow-y-auto border border-slate-200 rounded-xl text-xs">' +
+    '<table class="w-full text-left border-collapse">' +
+    '<thead class="bg-slate-100 text-slate-600 sticky top-0 font-bold">' +
+    '<tr><th class="p-2 border-b">Username</th><th class="p-2 border-b">Nama</th><th class="p-2 border-b">Role</th><th class="p-2 border-b">Sentra</th></tr>' +
+    '</thead>' +
+    '<tbody id="as-preview-body" class="divide-y divide-slate-100"></tbody>' +
+    '</table>' +
+    '</div>' +
+    '</div>' +
+
+    '<div class="grid grid-cols-2 gap-3">' +
+    '<button id="as-cancel" class="btn-soft" onclick="modalClose()">Batal</button>' +
+    '<button id="as-submit" class="btn-primary" disabled onclick="submitAssessorImport()">' + ic('check', 'w-4 h-4') + ' Proses Import</button>' +
+    '</div>' +
+    '</div>'
+  );
+
+  const fileInput = ov.querySelector('#as-csv-file');
+  if (fileInput) {
+    fileInput.addEventListener('change', e => handleAssessorFileSelect(e.target.files[0], ov));
+  }
+}
+
+function handleAssessorFileSelect(file, ov) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCsv(e.target.result);
+      if (!rows.length) {
+        toast('File CSV kosong atau format header tidak sesuai.', 'error');
+        return;
+      }
+
+      // Validasi baris
+      const valid = [];
+      rows.forEach(r => {
+        const username = String(r.username || '').trim().toLowerCase();
+        const nama = String(r.nama || '').trim();
+        let role = String(r.role || 'ASSESSOR').trim().toUpperCase();
+        if (!['ADMIN', 'KOORDINATOR', 'ASSESSOR'].includes(role)) role = 'ASSESSOR';
+        const pin = String(r.pin || '1234').trim();
+        const assignments = r.assignments || '';
+        if (username && nama) {
+          valid.push({ username, nama, role, pin, assignments });
+        }
+      });
+
+      pendingAssessorList = valid;
+      const previewWrap = ov.querySelector('#as-preview-wrap');
+      const statEl = ov.querySelector('#as-preview-stat');
+      const bodyEl = ov.querySelector('#as-preview-body');
+      const submitBtn = ov.querySelector('#as-submit');
+
+      if (!valid.length) {
+        toast('Tidak ada baris pengguna yang valid dalam CSV.', 'error');
+        if (submitBtn) submitBtn.disabled = true;
+        if (previewWrap) previewWrap.classList.add('hidden');
+        return;
+      }
+
+      if (previewWrap) previewWrap.classList.remove('hidden');
+      if (statEl) statEl.textContent = 'Ditemukan ' + valid.length + ' data siap diimport';
+      if (bodyEl) {
+        bodyEl.innerHTML = valid.slice(0, 15).map(u =>
+          '<tr>' +
+          '<td class="p-2 font-mono text-[11px]">' + esc(u.username) + '</td>' +
+          '<td class="p-2 font-bold text-slate-800">' + esc(u.nama) + '</td>' +
+          '<td class="p-2"><span class="badge bg-slate-100 text-slate-700 text-[10px]">' + esc(u.role) + '</span></td>' +
+          '<td class="p-2 text-slate-500 truncate max-w-[120px]">' + esc(u.assignments || '-') + '</td>' +
+          '</tr>'
+        ).join('') + (valid.length > 15 ? '<tr><td colspan="4" class="p-2 text-center text-slate-400 italic">... dan ' + (valid.length - 15) + ' data lainnya</td></tr>' : '');
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = ic('check', 'w-4 h-4') + ' Import ' + valid.length + ' Akun';
+      }
+    } catch (err) {
+      toast('Gagal memproses file CSV: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function submitAssessorImport() {
+  if (!pendingAssessorList || !pendingAssessorList.length) return;
+  if (guardPin()) return;
+
+  const btn = $('#as-submit');
+  setBtnLoading(btn, true, 'Mengimport...');
+
+  try {
+    const res = await api('importUsers', pendingAssessorList);
+    state.users = res.users;
+    modalClose();
+    toast('Berhasil mengimport ' + pendingAssessorList.length + ' akun pengguna!', 'success');
+    renderUsers();
+  } catch (err) {
+    setBtnLoading(btn, false);
+    toast(err.message, 'error');
+  }
+}
+
+/* ════════════════ VIEW: SISWA / PESERTA (STAFF) ════════════════ */
+let pesertaSearchQuery = '';
+
+async function showPeserta() {
+  if (!Auth.isStaff()) { goView('riwayat'); return; }
+  setView(spinnerHtml('Memuat data siswa…'));
+  try {
+    const res = await api('getPeserta');
+    state.peserta = res.peserta || [];
+    renderPeserta();
+  } catch (e) {
+    setView(errorHtml(e.message));
+  }
+}
+
+function renderPeserta() {
+  if (!Auth.isStaff()) return;
+
+  const q = pesertaSearchQuery.toLowerCase().trim();
+  let list = (state.peserta || []).slice();
+  if (q) {
+    list = list.filter(p =>
+      (p.nama && p.nama.toLowerCase().includes(q)) ||
+      (p.nomor_peserta && p.nomor_peserta.toLowerCase().includes(q)) ||
+      (p.asal_tk && p.asal_tk.toLowerCase().includes(q)) ||
+      (p.id_peserta && p.id_peserta.toLowerCase().includes(q))
+    );
+  }
+
+  const cardsHtml = list.length
+    ? list.map(pesertaCard).join('')
+    : '<div class="card p-12 text-center text-slate-400"><p class="text-base font-bold">Tidak ada data siswa</p><p class="text-xs mt-1">Coba kata kunci lain atau tambahkan siswa baru.</p></div>';
+
+  setView(
+    '<div class="anim-in">' +
+    '<div class="flex items-center justify-between gap-3 flex-wrap mb-4">' +
+    '<div>' +
+    '<h2 class="text-xl font-extrabold text-slate-800">Data Siswa / Peserta Didik</h2>' +
+    '<p class="text-sm text-slate-500 mt-0.5">Total ' + (state.peserta ? state.peserta.length : 0) + ' siswa terdaftar dalam seleksi SPMB</p>' +
+    '</div>' +
+    '<div class="flex items-center gap-2 flex-wrap">' +
+    '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="downloadTemplateSiswa()">' + ic('download', 'w-4 h-4') + ' Template CSV</button>' +
+    '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="uploadSiswaModal()">' + ic('upload', 'w-4 h-4') + ' Upload CSV</button>' +
+    '<button class="btn-primary !py-2 !px-3.5 !text-xs" onclick="pesertaModal()">' + ic('plus', 'w-4 h-4') + ' Siswa Baru</button>' +
+    '</div>' +
+    '</div>' +
+
+    '<div class="card p-3 mb-4 flex items-center gap-2">' +
+    ic('search', 'w-5 h-5 text-slate-400 shrink-0 ml-1') +
+    '<input type="text" id="peserta-search" class="w-full bg-transparent border-none text-sm focus:outline-none placeholder-slate-400 font-medium" placeholder="Cari nama siswa, no. peserta, atau asal TK..." value="' + esc(pesertaSearchQuery) + '" oninput="handlePesertaSearch(this.value)">' +
+    (pesertaSearchQuery ? '<button onclick="clearPesertaSearch()" class="text-xs text-slate-400 hover:text-slate-600 px-2">Reset</button>' : '') +
+    '</div>' +
+
+    '<div class="grid gap-3">' + cardsHtml + '</div>' +
+    '</div>'
+  );
+}
+
+function handlePesertaSearch(val) {
+  pesertaSearchQuery = val;
+  const q = val.toLowerCase().trim();
+  let list = (state.peserta || []).slice();
+  if (q) {
+    list = list.filter(p =>
+      (p.nama && p.nama.toLowerCase().includes(q)) ||
+      (p.nomor_peserta && p.nomor_peserta.toLowerCase().includes(q)) ||
+      (p.asal_tk && p.asal_tk.toLowerCase().includes(q)) ||
+      (p.id_peserta && p.id_peserta.toLowerCase().includes(q))
+    );
+  }
+  const container = $('.grid.gap-3');
+  if (container) {
+    container.innerHTML = list.length
+      ? list.map(pesertaCard).join('')
+      : '<div class="card p-12 text-center text-slate-400"><p class="text-base font-bold">Tidak ada data siswa ditemukan</p></div>';
+  }
+}
+
+function clearPesertaSearch() {
+  pesertaSearchQuery = '';
+  renderPeserta();
+}
+
+function pesertaCard(p) {
+  const hasAssessment = !!p.id_assessment;
+  return '<div class="card p-4 anim-in flex flex-col sm:flex-row sm:items-center gap-3">' +
+    '<div class="w-11 h-11 rounded-2xl bg-teal-50 text-teal-600 grid place-items-center font-extrabold text-sm shrink-0">' +
+    esc(inisial(p.nama)) +
+    '</div>' +
+    '<div class="flex-1 min-w-0">' +
+    '<div class="flex items-center gap-2 flex-wrap">' +
+    '<p class="font-extrabold text-slate-800 text-base">' + esc(p.nama) + '</p>' +
+    '<span class="badge bg-slate-100 text-slate-600 font-mono text-[11px]">' + esc(p.nomor_peserta || '-') + '</span>' +
+    (hasAssessment
+      ? '<span class="badge bg-teal-50 text-teal-700">' + ic('check', 'w-3 h-3') + ' Sudah Dinilai</span>'
+      : '<span class="badge bg-amber-50 text-amber-700">Belum Dinilai</span>') +
+    '</div>' +
+    '<div class="flex items-center gap-3 text-xs text-slate-500 mt-1 flex-wrap">' +
+    '<span>Asal: <b>' + esc(p.asal_tk || 'Belum diisi') + '</b></span>' +
+    (p.waktu_dibuat ? '<span class="text-slate-400">• Didaftarkan: ' + esc(p.waktu_dibuat.slice(0, 10)) + '</span>' : '') +
+    '</div>' +
+    '</div>' +
+    '<div class="flex items-center gap-2 shrink-0 flex-wrap">' +
+    (hasAssessment
+      ? '<button class="btn-soft !py-2 !px-3 !text-xs !bg-teal-50 !text-teal-700 hover:!bg-teal-100" onclick="showHasilById(\'' + esc(p.id_assessment) + '\')">' + ic('eye', 'w-4 h-4') + ' Lihat Hasil</button>'
+      : '<button class="btn-primary !py-2 !px-3 !text-xs" onclick="wizardStartPeserta(\'' + esc(p.id_peserta) + '\')">' + ic('play', 'w-4 h-4') + ' Mulai Assessment</button>') +
+    '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="pesertaModal(\'' + esc(p.id_peserta) + '\')">' + ic('edit', 'w-4 h-4') + ' Edit</button>' +
+    (hasAssessment ? '' : '<button class="btn-soft !py-2 !px-2.5 !text-xs !bg-rose-50 !text-rose-600 hover:!bg-rose-100" onclick="hapusPeserta(\'' + esc(p.id_peserta) + '\')" title="Hapus Siswa">' + ic('trash', 'w-4 h-4') + '</button>') +
+    '</div>' +
+    '</div>';
+}
+
+function wizardStartPeserta(id) {
+  wizardStart();
+  if (typeof wizPilihPeserta === 'function') {
+    wizPilihPeserta(id);
+  }
+}
+
+function downloadTemplateSiswa() {
+  const headers = ['nomor', 'nama', 'asal_sekolah'];
+  const rows = [
+    headers,
+    ['PPDB-001', 'Ahmad Fauzan Ramadhan', 'TK Anak Saleh 1'],
+    ['PPDB-002', 'Aisyah Nur Fadhilah', 'TK Anak Saleh 2'],
+    ['PPDB-003', 'Muhammad Rizki Pratama', 'RA Al-Ikhlas'],
+    ['PPDB-004', 'Khadijah Salsabila', 'TK Islam Terpadu Ceria']
+  ];
+  downloadCsv('template_siswa.csv', rows);
+}
+
+let pendingSiswaList = [];
+
+function uploadSiswaModal() {
+  if (!Auth.isStaff()) return;
+  pendingSiswaList = [];
+
+  const ov = modalOpen(
+    '<div>' +
+    '<div class="flex items-center gap-3 mb-4">' +
+    '<div class="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 grid place-items-center shrink-0">' + ic('upload', 'w-5 h-5') + '</div>' +
+    '<div><h3 class="text-lg font-extrabold text-slate-800">Upload Data Siswa / Peserta</h3>' +
+    '<p class="text-xs text-slate-500">Import peserta seleksi SPMB massal dari file CSV</p></div></div>' +
+
+    '<div class="rounded-2xl bg-slate-50 border border-slate-200/70 p-3.5 text-xs text-slate-600 mb-4">' +
+    '<p class="font-bold text-slate-700 mb-1">Ketentuan Format CSV:</p>' +
+    '<ul class="list-disc pl-4 space-y-0.5">' +
+    '<li>Header kolom: <b>nomor, nama, asal_sekolah</b></li>' +
+    '<li>Kolom <code>nomor</code> dan <code>nama</code> wajib terisi</li>' +
+    '<li>Nomor peserta yang sudah terdaftar akan otomatis dilewati (tidak duplikat)</li>' +
+    '</ul>' +
+    '</div>' +
+
+    '<div class="mb-4">' +
+    '<label class="block text-center p-6 border-2 border-dashed border-teal-200 hover:border-teal-400 rounded-2xl bg-teal-50/30 cursor-pointer transition">' +
+    ic('file', 'w-8 h-8 text-teal-500 mx-auto mb-2') +
+    '<span class="block text-xs font-bold text-teal-700">Pilih File CSV Siswa</span>' +
+    '<span class="block text-[11px] text-slate-400 mt-0.5">atau drag & drop file ke sini (.csv)</span>' +
+    '<input type="file" id="si-csv-file" accept=".csv,text/csv,text/plain" class="hidden">' +
+    '</label>' +
+    '</div>' +
+
+    '<div id="si-preview-wrap" class="hidden mb-4">' +
+    '<div class="flex justify-between items-center mb-1.5">' +
+    '<span id="si-preview-stat" class="text-xs font-bold text-slate-700"></span>' +
+    '</div>' +
+    '<div class="max-h-48 overflow-y-auto border border-slate-200 rounded-xl text-xs">' +
+    '<table class="w-full text-left border-collapse">' +
+    '<thead class="bg-slate-100 text-slate-600 sticky top-0 font-bold">' +
+    '<tr><th class="p-2 border-b">No. Peserta</th><th class="p-2 border-b">Nama Siswa</th><th class="p-2 border-b">Asal Sekolah</th></tr>' +
+    '</thead>' +
+    '<tbody id="si-preview-body" class="divide-y divide-slate-100"></tbody>' +
+    '</table>' +
+    '</div>' +
+    '</div>' +
+
+    '<div class="grid grid-cols-2 gap-3">' +
+    '<button id="si-cancel" class="btn-soft" onclick="modalClose()">Batal</button>' +
+    '<button id="si-submit" class="btn-primary" disabled onclick="submitSiswaImport()">' + ic('check', 'w-4 h-4') + ' Proses Import</button>' +
+    '</div>' +
+    '</div>'
+  );
+
+  const fileInput = ov.querySelector('#si-csv-file');
+  if (fileInput) {
+    fileInput.addEventListener('change', e => handleSiswaFileSelect(e.target.files[0], ov));
+  }
+}
+
+function handleSiswaFileSelect(file, ov) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const rows = parseCsv(e.target.result);
+      if (!rows.length) {
+        toast('File CSV kosong atau format header tidak sesuai.', 'error');
+        return;
+      }
+
+      const valid = [];
+      rows.forEach(r => {
+        const nomor = String(r.nomor || r.nomor_peserta || r.no_peserta || '').trim();
+        const nama = String(r.nama || r.nama_siswa || r.nama_lengkap || '').trim();
+        const asal = String(r.asal_sekolah || r.asal_tk || r.asal || '').trim();
+        if (nomor && nama) {
+          valid.push({ nomor, nama, asalSekolah: asal });
+        }
+      });
+
+      pendingSiswaList = valid;
+      const previewWrap = ov.querySelector('#si-preview-wrap');
+      const statEl = ov.querySelector('#si-preview-stat');
+      const bodyEl = ov.querySelector('#si-preview-body');
+      const submitBtn = ov.querySelector('#si-submit');
+
+      if (!valid.length) {
+        toast('Tidak ada baris siswa yang valid dalam CSV.', 'error');
+        if (submitBtn) submitBtn.disabled = true;
+        if (previewWrap) previewWrap.classList.add('hidden');
+        return;
+      }
+
+      if (previewWrap) previewWrap.classList.remove('hidden');
+      if (statEl) statEl.textContent = 'Ditemukan ' + valid.length + ' calon siswa siap diimport';
+      if (bodyEl) {
+        bodyEl.innerHTML = valid.slice(0, 15).map(s =>
+          '<tr>' +
+          '<td class="p-2 font-mono text-[11px] font-bold text-teal-700">' + esc(s.nomor) + '</td>' +
+          '<td class="p-2 font-bold text-slate-800">' + esc(s.nama) + '</td>' +
+          '<td class="p-2 text-slate-500 truncate max-w-[140px]">' + esc(s.asalSekolah || '-') + '</td>' +
+          '</tr>'
+        ).join('') + (valid.length > 15 ? '<tr><td colspan="3" class="p-2 text-center text-slate-400 italic">... dan ' + (valid.length - 15) + ' data lainnya</td></tr>' : '');
+      }
+      if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = ic('check', 'w-4 h-4') + ' Import ' + valid.length + ' Siswa';
+      }
+    } catch (err) {
+      toast('Gagal memproses file CSV: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+}
+
+async function submitSiswaImport() {
+  if (!pendingSiswaList || !pendingSiswaList.length) return;
+  if (guardPin()) return;
+
+  const btn = $('#si-submit');
+  setBtnLoading(btn, true, 'Mengimport...');
+
+  try {
+    const res = await api('importPeserta', pendingSiswaList);
+    modalClose();
+    toast('Berhasil mengimport ' + res.count + ' siswa baru!', 'success');
+    showPeserta();
+  } catch (err) {
+    setBtnLoading(btn, false);
+    toast(err.message, 'error');
+  }
+}
+
+function pesertaModal(id) {
+  if (!Auth.isStaff()) return;
+  const edit = !!id;
+  const p = edit ? state.peserta.find(x => x.id_peserta === id) : null;
+
+  const ov = modalOpen(
+    '<h3 class="text-lg font-extrabold text-slate-800 text-center">' + (edit ? 'Edit Data Siswa' : 'Tambah Siswa Baru') + '</h3>' +
+    '<div class="mt-4 grid gap-3 text-left">' +
+    '<div><label class="label">Nomor Peserta SPMB *</label>' +
+    '<input id="pf-nomor" class="input" value="' + esc(p ? p.nomor_peserta : '') + '" placeholder="cth: PPDB-001"></div>' +
+    '<div><label class="label">Nama Lengkap Siswa *</label>' +
+    '<input id="pf-nama" class="input" value="' + esc(p ? p.nama : '') + '" placeholder="cth: Ahmad Fauzan Ramadhan"></div>' +
+    '<div><label class="label">Asal TK / Sekolah</label>' +
+    '<input id="pf-asal" class="input" value="' + esc(p ? p.asal_tk : '') + '" placeholder="cth: TK Anak Saleh 1"></div>' +
+    '</div>' +
+    '<div class="mt-5 grid grid-cols-2 gap-3">' +
+    '<button id="pf-cancel" class="btn-soft" onclick="modalClose()">Batal</button>' +
+    '<button id="pf-save" class="btn-primary">Simpan</button></div>'
+  );
+
+  ov.querySelector('#pf-save').onclick = async () => {
+    const payload = {
+      id_peserta: edit ? p.id_peserta : '',
+      nomor: $('#pf-nomor', ov).value.trim(),
+      nama: $('#pf-nama', ov).value.trim(),
+      asal_tk: $('#pf-asal', ov).value.trim()
+    };
+    if (!payload.nomor || !payload.nama) {
+      toast('Nomor peserta dan nama lengkap wajib diisi.', 'error');
+      return;
+    }
+    if (guardPin()) return;
+
+    const btn = ov.querySelector('#pf-save');
+    setBtnLoading(btn, true, 'Menyimpan…');
+    try {
+      await api('savePeserta', payload);
+      modalClose();
+      toast(edit ? 'Data siswa diperbarui.' : 'Siswa berhasil ditambahkan.', 'success');
+      showPeserta();
+    } catch (e) {
+      setBtnLoading(btn, false);
+      toast(e.message, 'error');
+    }
+  };
+}
+
+async function hapusPeserta(id) {
+  if (!Auth.isStaff()) return;
+  const p = state.peserta.find(x => x.id_peserta === id);
+  if (!p) return;
+  if (guardPin()) return;
+
+  const ok = await confirmModal({
+    title: 'Hapus data siswa?',
+    icon: 'trash',
+    html: '<p class="text-sm">Apakah Anda yakin ingin menghapus <b>' + esc(p.nama) + '</b> (' + esc(p.nomor_peserta) + ')? Tindakan ini tidak dapat dibatalkan.</p>',
+    confirmText: 'Ya, Hapus',
+    danger: true
+  });
+  if (!ok) return;
+
+  try {
+    await api('deletePeserta', id);
+    toast('Data siswa berhasil dihapus.', 'success');
+    showPeserta();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
 /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• VIEW: HASIL DETAIL â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
 async function showHasil(id) {
-  setView(spinnerHtml('Memuat hasil assessmentâ€¦'));
+  setView(spinnerHtml('Memuat hasil assessment…'));
   let res;
   try { res = await api('getAssessment', id); }
   catch (e) { setView(errorHtml(e.message)); return; }
@@ -854,11 +1454,11 @@ async function showHasil(id) {
     '<div class="card p-5 sm:p-6 anim-in relative overflow-hidden">' +
     '<div class="absolute top-0 right-0 w-40 h-40 bg-gradient-to-br from-teal-50 to-emerald-50 rounded-bl-[80px] pointer-events-none"></div>' +
     '<div class="relative flex flex-wrap items-start justify-between gap-3">' +
-    '<div><p class="text-[11px] font-extrabold uppercase tracking-widest text-teal-600">Assessment Report â€” SPMB ' + esc(state.config.tahunPelajaran) + '</p>' +
+    '<div><p class="text-[11px] font-extrabold uppercase tracking-widest text-teal-600">Assessment Report  SPMB ' + esc(state.config.tahunPelajaran) + '</p>' +
     '<h2 class="text-2xl font-extrabold text-slate-800 mt-1">' + esc(a.nama) + '</h2>' +
-    (staff ? '<p class="text-sm text-slate-500 mt-1">Assessment dibuat oleh: <b class="text-slate-700">' + esc(a.creator || '-') + '</b>' + (a.creatorUsername ? ' (@' + esc(a.creatorUsername) + ')' : '') + ' Â· ' + fmtTanggal(a.tanggal) + '</p>' : '') +
-    '<p class="text-sm text-slate-500 mt-1">No. ' + esc(a.nomor || a.id_peserta) + ' â€¢ Asal: ' + esc(a.asal_tk || '-') + '</p>' +
-    // '<p class="text-sm text-slate-500">Dibuat oleh: ' + esc(a.creator) + ' â€¢ ' + fmtTanggal(a.tanggal) + '</p>' +
+    (staff ? '<p class="text-sm text-slate-500 mt-1">Assessment dibuat oleh: <b class="text-slate-700">' + esc(a.creator || '-') + '</b>' + (a.creatorUsername ? ' (@' + esc(a.creatorUsername) + ')' : '') + '  ' + fmtTanggal(a.tanggal) + '</p>' : '') +
+    '<p class="text-sm text-slate-500 mt-1">No. ' + esc(a.nomor || a.id_peserta) + ' | Asal: ' + esc(a.asal_tk || '-') + '</p>' +
+    // '<p class="text-sm text-slate-500">Dibuat oleh: ' + esc(a.creator) + ' | ' + fmtTanggal(a.tanggal) + '</p>' +
     (a.status === 'SUBMITTED' && a.koordinator ? '<p class="text-sm text-slate-500">Koordinator Assesmen: <b class="text-slate-700">' + esc(a.koordinator) + '</b></p>' : '') +
     '</div>' +
     '<div class="flex flex-col items-end gap-2">' + statusBadge(a.status) + (h.kode ? kodeBadge(h.kode) : '') + '</div></div></div>';
@@ -869,7 +1469,7 @@ async function showHasil(id) {
       : (staff ? '' : 'Sentra tugas Anda sedang dikerjakan rekan lain atau sudah final.');
     html += '<div class="card border-amber-200 bg-amber-50/70 p-5 anim-in mt-4 flex flex-col sm:flex-row sm:items-center gap-4">' +
       '<span class="text-amber-500 shrink-0">' + ic(a.status === 'SIAP_REVIEW' ? 'star' : 'alert', 'w-7 h-7') + '</span>' +
-      '<div class="flex-1"><p class="font-extrabold text-amber-800">' + (a.status === 'SIAP_REVIEW' ? 'Semua sentra final â€” menunggu Submit Final oleh Koordinator' : 'Assessment belum selesai') + '</p>' +
+      '<div class="flex-1"><p class="font-extrabold text-amber-800">' + (a.status === 'SIAP_REVIEW' ? 'Semua sentra final  menunggu Submit Final oleh Koordinator' : 'Assessment belum selesai') + '</p>' +
       (pendingTxt ? '<p class="text-sm text-amber-700/90 mt-0.5">' + pendingTxt + '</p>' : '') + '</div>' +
       (myPending.length ? '<button class="btn-primary shrink-0" data-act="lanjut" data-id="' + esc(a.id) + '">' + ic('edit', 'w-4 h-4') + ' Lanjutkan Mengisi</button>' : '') +
       (staff ? '<button class="btn-primary shrink-0 ' + (h.lengkap ? '' : 'opacity-40 pointer-events-none') + '" data-act="submit" data-id="' + esc(a.id) + '">' + ic('check', 'w-4 h-4') + ' Submit Final</button>' : '') +
@@ -881,7 +1481,7 @@ async function showHasil(id) {
     const ownTxt = st.owner ? (st.ownerName || st.owner) : '';
     html += '<div class="card p-5 anim-in mt-4">' +
       '<div class="flex items-center justify-between flex-wrap gap-2">' +
-      '<h3 class="font-extrabold text-slate-800">' + s.bab + ' â€” ' + esc(s.nama) + '</h3>' +
+      '<h3 class="font-extrabold text-slate-800">' + s.bab + '  ' + esc(s.nama) + '</h3>' +
       '<div class="flex items-center gap-2 flex-wrap">' +
       '<span class="badge ' + (st.status === 'FINAL' ? 'bg-emerald-50 text-emerald-600' : (ownTxt ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-400')) + '">' +
       (st.status === 'FINAL' ? 'âœ“ ' + esc(st.assessor) : (ownTxt ? ic('lock', 'w-3 h-3') + ' ' + esc(ownTxt) : 'Belum diklaim')) + '</span>' +
@@ -921,7 +1521,7 @@ function detailMateri(m, d, r) {
   return '<div class="rounded-2xl border border-slate-200 p-4">' +
     '<div class="flex items-center justify-between gap-2 flex-wrap">' +
     '<p class="font-extrabold text-sm text-slate-800">' + m.no + ' ' + esc(m.nama) + '</p>' +
-    '<span class="text-xs font-extrabold ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600') + '">' + r.skor + '/' + r.maks + ' â€¢ ' + (r.lengkap ? r.persen + '%' : 'belum lengkap') + '</span></div>' +
+    '<span class="text-xs font-extrabold ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600') + '">' + r.skor + '/' + r.maks + ' | ' + (r.lengkap ? r.persen + '%' : 'belum lengkap') + '</span></div>' +
     '<div class="bar-track mt-2"><div class="bar-fill ' + barColor(r) + '" style="width:' + (r.lengkap ? r.persen : 0) + '%"></div></div>' +
     '<div class="mt-2">' + itemsHtml + '</div>' +
     (d.catatan ? '<p class="mt-2 text-xs text-slate-500 bg-slate-50 rounded-xl p-3"><b>Catatan:</b> ' + esc(d.catatan) + '</p>' : '') +
@@ -931,7 +1531,7 @@ function bab4Card(h, a) {
   const cs = (a.data && a.data.catatanSentra) || {};
   const rows = state.schema.sentra.map((s, i) => ['4.' + (i + 1), s.nama, h.sentra[s.id], cs[s.id]]);
   return '<div class="card p-5 anim-in mt-4">' +
-    '<h3 class="font-extrabold text-slate-800">BAB IV â€” Total Nilai</h3>' +
+    '<h3 class="font-extrabold text-slate-800">BAB IV  Total Nilai</h3>' +
     '<div class="mt-3 overflow-x-auto"><table class="w-full text-sm min-w-[480px]">' +
     '<thead><tr class="text-left text-[11px] uppercase text-slate-400"><th class="pb-2">No</th><th class="pb-2">Materi</th><th class="pb-2 text-right">Rerata</th><th class="pb-2 pl-4">Informasi Tambahan</th></tr></thead>' +
     '<tbody class="divide-y divide-slate-100">' +
@@ -960,7 +1560,7 @@ async function printAssessmentById(id) {
     openPrintWindow(buildPrintHtml(hasilCache.assessment, hasilCache.hasil));
     return;
   }
-  toast('Menyiapkan dokumenâ€¦', 'info', 2000);
+  toast('Menyiapkan dokumen...', 'info', 2000);
   try {
     const res = await api('getAssessment', id);
     openPrintWindow(buildPrintHtml(res.assessment, res.hasil));
@@ -1028,13 +1628,13 @@ function buildPrintHtml(a, h) {
   const penilai = state.schema.sentra.map(s => {
     const e = ms[s.id];
     return (e && e.status === 'FINAL' && e.assessor) ? s.singkat + ': ' + e.assessor : null;
-  }).filter(Boolean).join(' â€¢ ');
+  }).filter(Boolean).join(' | ');
   const totalRows = state.schema.sentra.map((s, i) =>
     '<tr><td>4.' + (i + 1) + '</td><td class="tal">' + esc(s.nama.toUpperCase()) + '</td><td>' + (h.sentra[s.id] == null ? '-' : h.sentra[s.id]) + '</td><td class="tal">' + esc(cs[s.id] || '-') + '</td></tr>'
   ).join('');
   let body = '';
   state.schema.sentra.forEach(s => {
-    body += '<div class="bab"><div class="bab-title">' + s.bab + ' â€” OBSERVASI ' + esc(s.nama.toUpperCase()) + '</div>';
+    body += '<div class="bab"><div class="bab-title">' + s.bab + '  OBSERVASI ' + esc(s.nama.toUpperCase()) + '</div>';
     s.materi.forEach(m => {
       const d = (a.data && a.data[m.id]) || {};
       const r = h.materi[m.id];
@@ -1046,18 +1646,18 @@ function buildPrintHtml(a, h) {
     });
     body += '</div>';
   });
-  body += '<div class="bab"><div class="bab-title">BAB IV â€” TOTAL NILAI</div>' +
+  body += '<div class="bab"><div class="bab-title">BAB IV  TOTAL NILAI</div>' +
     '<table style="margin-top:8px"><thead><tr><th style="width:36px">No</th><th>Materi</th><th style="width:90px">Rerata Nilai</th><th>Informasi Tambahan</th></tr></thead><tbody>' +
     totalRows +
     '</tbody></table>' +
-    '<div class="kode-box">Kode Hasil Asesmen: <b class="kode">' + (h.kode || '-') + '</b> &nbsp;â€” ' + esc(h.kodeLabel || '-') + '</div></div>' +
+    '<div class="kode-box">Kode Hasil Asesmen: <b class="kode">' + (h.kode || '-') + '</b> &nbsp; ' + esc(h.kodeLabel || '-') + '</div></div>' +
     '<div class="ttd"><div>Koordinator Assesmen,<div class="space"></div>( ' + (a.koordinator ? esc(a.koordinator) : '..................') + ' )</div></div>';
 
-  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Laporan Assessment â€” ' + esc(a.nama) + '</title>' +
+  return '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Laporan Assessment  ' + esc(a.nama) + '</title>' +
     '<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700;900&display=swap" rel="stylesheet">' +
     '<style>' + PRINT_CSS + '</style></head><body>' +
     '<div class="doc-head"><h1>PENERIMAAN PESERTA DIDIK BARU</h1><h2>ASSESSMENT REPORT</h2>' +
-    '<h3>' + esc(state.config.sekolah).toUpperCase() + ' â€” TAHUN PELAJARAN ' + esc(state.config.tahunPelajaran) + '</h3>' +
+    '<h3>' + esc(state.config.sekolah).toUpperCase() + '  TAHUN PELAJARAN ' + esc(state.config.tahunPelajaran) + '</h3>' +
     '<table class="ident">' +
     '<tr><td style="width:150px">Nama Peserta Didik</td><td>: <b>' + esc(a.nama) + '</b></td><td style="width:120px">Tanggal</td><td>: ' + fmtTanggal(a.tanggal) + '</td></tr>' +
     '<tr><td>Nomor / ID Peserta</td><td>: ' + esc(a.nomor || a.id_peserta) + '</td><td>ID Assessment</td><td>: ' + esc(a.id) + ' (' + esc(a.status) + ')</td></tr>' +
@@ -1106,7 +1706,7 @@ document.addEventListener('click', async e => {
   } else if (act === 'unlock') {
     if (!Auth.isStaff()) { toast('Khusus Koordinator/Admin.', 'error'); return; }
     if (guardPin()) return;
-    const ok = await confirmModal({ title: 'Buka Kunci Assessment?', html: '<p class="text-sm">Status kembali seperti sebelum submit â€” baris HASIL akan dihapus.</p>', confirmText: 'Ya, Buka Kunci', danger: true });
+    const ok = await confirmModal({ title: 'Buka Kunci Assessment?', html: '<p class="text-sm">Status kembali seperti sebelum submit  baris HASIL akan dihapus.</p>', confirmText: 'Ya, Buka Kunci', danger: true });
     if (!ok) return;
     try {
       await api('unlockAssessment', id);
@@ -1121,13 +1721,13 @@ document.addEventListener('click', async e => {
     try { res = await api('getAssessment', id); }
     catch (err) { toast(err.message, 'error'); return; }
     const h = res.hasil;
-    if (!h.lengkap) { toast('Penilaian belum lengkap â€” tidak bisa submit.', 'error'); return; }
+    if (!h.lengkap) { toast('Penilaian belum lengkap  tidak bisa submit.', 'error'); return; }
     const ok = await confirmModal({
       title: 'Submit Assessment Final?',
       html: '<div class="text-left text-sm bg-slate-50 rounded-2xl p-4 grid gap-1.5">' +
         '<div class="flex justify-between"><span class="text-slate-500">Peserta</span><b>' + esc(res.assessment.nama) + '</b></div>' +
         '<div class="flex justify-between"><span class="text-slate-500">Nilai Akhir</span><b>' + h.nilaiAkhir + '</b></div>' +
-        '<div class="flex justify-between"><span class="text-slate-500">Kode</span><b>' + h.kode + ' â€” ' + esc(h.kodeLabel) + '</b></div>' +
+        '<div class="flex justify-between"><span class="text-slate-500">Kode</span><b>' + h.kode + '  ' + esc(h.kodeLabel) + '</b></div>' +
         '<div class="flex justify-between"><span class="text-slate-500">Ttd Koordinator</span><b>' + esc(Auth.user.nama) + '</b></div></div>' +
         '<p class="text-xs text-slate-400 mt-3">Setelah submit, data terkunci, tersimpan di sheet HASIL, dan laporan ditandatangani atas nama Anda.</p>',
       confirmText: 'Ya, Submit'
@@ -1155,7 +1755,7 @@ document.addEventListener('click', async e => {
     if (guardPin()) return;
     const ok = await confirmModal({
       title: 'Lepaskan klaim sentra?',
-      html: '<p class="text-sm">Sentra <b>' + esc(sentraName(el.dataset.sid)) + '</b> dibuka â€” assessor lain (BAB sama) dapat mengambil alih. Skor yang sudah masuk <b>tetap tersimpan</b>.</p>',
+      html: '<p class="text-sm">Sentra <b>' + esc(sentraName(el.dataset.sid)) + '</b> dibuka  assessor lain (BAB sama) dapat mengambil alih. Skor yang sudah masuk <b>tetap tersimpan</b>.</p>',
       confirmText: 'Ya, Lepaskan', danger: true
     });
     if (!ok) return;
@@ -1184,10 +1784,10 @@ document.addEventListener('click', async e => {
       title: 'Hapus akun "' + u.nama + '"?',
       icon: 'trash',
       html: '<div class="text-left text-xs text-slate-600 bg-slate-50 rounded-2xl p-4 grid gap-1.5">' +
-        '<p>â€¢ Username <b>@' + esc(u.username) + '</b> tidak akan bisa login lagi.</p>' +
-        '<p>â€¢ Riwayat assessment & laporan yang sudah ada <b>tidak ikut terhapus</b> â€” nama tetap tercatat.</p>' +
-        '<p>â€¢ Penilaian yang belum selesai di sentra tugasnya diambil alih Koordinator/Admin / assessor lain.</p>' +
-        '<p class="text-rose-600 font-bold">â€¢ Tindakan permanen dan tidak bisa dibatalkan.</p>' +
+        '<p>| Username <b>@' + esc(u.username) + '</b> tidak akan bisa login lagi.</p>' +
+        '<p>| Riwayat assessment & laporan yang sudah ada <b>tidak ikut terhapus</b>  nama tetap tercatat.</p>' +
+        '<p>| Penilaian yang belum selesai di sentra tugasnya diambil alih Koordinator/Admin / assessor lain.</p>' +
+        '<p class="text-rose-600 font-bold">| Tindakan permanen dan tidak bisa dibatalkan.</p>' +
         '</div>' +
         '<p class="text-[11px] text-slate-400 mt-3">Jika hanya ingin menstop akses sementara, <b>Nonaktifkan</b> adalah alternatif yang lebih aman.</p>',
       confirmText: 'Ya, Hapus Permanen',
@@ -1210,7 +1810,7 @@ const App = {
     let t = null;
     try { t = localStorage.getItem('ppdb_token'); } catch (e) {}
     /* Identitas sekolah di layar login/boot diambil dari CONFIG sheet, bukan
-     * ditulis di HTML â€” supaya ganti tahun pelajaran tidak perlu deploy ulang. */
+     * ditulis di HTML  supaya ganti tahun pelajaran tidak perlu deploy ulang. */
     apiNoAuth('getPublicBranding').then(b => {
       state.config = state.config || {};
       state.config.sekolah = b.sekolah;

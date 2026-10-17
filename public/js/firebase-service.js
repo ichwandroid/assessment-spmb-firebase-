@@ -281,19 +281,36 @@ const FirebaseService = {
   },
 
   async getPeserta(query) {
-    const snap = await db.collection('peserta').get();
+    const [snap, asmSnap] = await Promise.all([
+      db.collection('peserta').get(),
+      db.collection('assessments').get()
+    ]);
+    const asmMap = {};
+    const countMap = {};
+    asmSnap.forEach(d => {
+      const data = d.data();
+      const pId = data.idPeserta || data.id_peserta;
+      if (pId) {
+        asmMap[pId] = d.id;
+        countMap[pId] = (countMap[pId] || 0) + 1;
+      }
+    });
+
     let list = snap.docs.map(d => {
       const data = d.data();
       return {
         id_peserta: data.id,
         nama: data.nama,
         nomor_peserta: data.nomor,
-        asal_tk: data.asalSekolah || data.asal_tk || ''
+        asal_tk: data.asalSekolah || data.asal_tk || '',
+        waktu_dibuat: data.waktuDibuat || '',
+        id_assessment: asmMap[data.id] || null,
+        jumlah_assessment: countMap[data.id] || 0
       };
     });
     if (query) {
       const q = String(query).toLowerCase();
-      list = list.filter(p => p.nama.toLowerCase().includes(q) || p.nomor_peserta.toLowerCase().includes(q) || p.id_peserta.toLowerCase().includes(q));
+      list = list.filter(p => p.nama.toLowerCase().includes(q) || (p.nomor_peserta && p.nomor_peserta.toLowerCase().includes(q)) || p.id_peserta.toLowerCase().includes(q));
     }
     return { ok: true, peserta: list };
   },
@@ -349,15 +366,89 @@ const FirebaseService = {
     };
   },
 
+  async importPeserta(list) {
+    const user = this.getCurrentUser();
+    if (!user) throw new Error('SESSION_EXPIRED');
+    if (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR') throw new Error('Akses ditolak — khusus Koordinator/Admin.');
+    if (!Array.isArray(list) || !list.length) throw new Error('Data peserta kosong.');
+
+    const snap = await db.collection('peserta').get();
+    let maxNum = 0;
+    const existingNomor = new Set();
+    snap.forEach(d => {
+      const data = d.data();
+      if (data.nomor) existingNomor.add(String(data.nomor).trim().toLowerCase());
+      const m = String(d.id).match(/^P(\d+)$/);
+      if (m) {
+        const num = parseInt(m[1], 10);
+        if (num > maxNum) maxNum = num;
+      }
+    });
+
+    const now = this.nowStr();
+    let inserted = 0;
+    const batch = db.batch();
+
+    for (const item of list) {
+      const nama = clampStr_(item.nama, 100);
+      const nomor = clampStr_(item.nomor, 50);
+      const asal = clampStr_(item.asalSekolah || item.asal_tk || item.asal_sekolah, 100);
+      if (!nama || !nomor) continue;
+
+      if (existingNomor.has(nomor.toLowerCase())) continue;
+      existingNomor.add(nomor.toLowerCase());
+
+      maxNum++;
+      const id = 'P' + String(maxNum).padStart(4, '0');
+      const docRef = db.collection('peserta').doc(id);
+      batch.set(docRef, {
+        id,
+        id_peserta: id,
+        nama,
+        nomor,
+        nomor_peserta: nomor,
+        asalSekolah: asal,
+        asal_tk: asal,
+        waktuDibuat: now,
+        waktuDiubah: now
+      });
+      inserted++;
+    }
+
+    if (inserted > 0) {
+      await batch.commit();
+      await this.audit(user, 'PESERTA_IMPORT', `${inserted} Peserta`, 'Import massal');
+    }
+
+    return { ok: true, count: inserted };
+  },
+
+  async deletePeserta(id) {
+    const user = this.getCurrentUser();
+    if (!user) throw new Error('SESSION_EXPIRED');
+    if (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR') throw new Error('Akses ditolak — khusus Koordinator/Admin.');
+
+    const exSnap = await db.collection('assessments').where('idPeserta', '==', id).get();
+    if (!exSnap.empty) {
+      throw new Error('Peserta ini sudah memiliki lembar assessment. Hapus lembar assessment terlebih dahulu.');
+    }
+
+    await db.collection('peserta').doc(id).delete();
+    await this.audit(user, 'PESERTA_HAPUS', id, '');
+    return { ok: true };
+  },
+
   // ════════════════ ASSESSMENT (PENILAIAN) ════════════════
   canAccessAssessment(user, assessment) {
     if (user.role === 'ADMIN' || user.role === 'KOORDINATOR') return true;
     if (assessment.usernameAssessor && assessment.usernameAssessor.toLowerCase() === user.username.toLowerCase()) return true;
+    const asg = user.assignments || [];
+    if (asg.length === 0) return true;
     const meta = assessment.meta || {};
     const sentras = meta.sentra || {};
     return Object.keys(sentras).some(sid => {
       const st = sentras[sid] || {};
-      const assigned = (user.assignments || []).includes(sid);
+      const assigned = asg.includes(sid);
       const owned = st.owner && st.owner.toLowerCase() === user.username.toLowerCase();
       return assigned || owned;
     });
@@ -502,7 +593,8 @@ const FirebaseService = {
 
       FORM_SCHEMA.sentra.forEach(s => {
         const st = merged.meta.sentra[s.id];
-        const assigned = (user.assignments || []).includes(s.id);
+        const asg = user.assignments || [];
+        const assigned = asg.length === 0 || asg.includes(s.id);
         const isStaff = user.role === 'ADMIN' || user.role === 'KOORDINATOR';
         const editable = isStaff || (assigned && st.status !== 'FINAL' && (!st.owner || st.owner === user.username));
         let part;
@@ -949,6 +1041,63 @@ const FirebaseService = {
       await this.audit(caller, 'USER_UBAH', username, `Nama: ${nama}, Role: ${role}`);
     }
 
+    return await this.getUsers();
+  },
+
+  async importUsers(list) {
+    const caller = this.getCurrentUser();
+    if (!caller || caller.role !== 'ADMIN') throw new Error('Akses ditolak — khusus Admin.');
+    if (!Array.isArray(list) || !list.length) throw new Error('Data pengguna kosong.');
+
+    const now = this.nowStr();
+    let imported = 0;
+
+    for (const item of list) {
+      const username = clampStr_(item.username, 30).toLowerCase();
+      const nama = clampStr_(item.nama, 80);
+      let role = String(item.role || 'ASSESSOR').toUpperCase();
+      if (!['ADMIN', 'KOORDINATOR', 'ASSESSOR'].includes(role)) role = 'ASSESSOR';
+      const pin = String(item.pin || '1234').trim();
+
+      if (!username || !nama) continue;
+
+      let assignments = [];
+      if (role === 'ASSESSOR') {
+        if (Array.isArray(item.assignments)) {
+          assignments = item.assignments;
+        } else if (typeof item.assignments === 'string') {
+          assignments = item.assignments.split(/[;,]/).map(s => s.trim().toLowerCase()).filter(Boolean);
+        }
+      }
+
+      const pinHash = await this.hashPin(username, pin);
+      const uRef = db.collection('users').doc(username);
+      const uSnap = await uRef.get();
+
+      if (!uSnap.exists) {
+        await uRef.set({
+          username,
+          nama,
+          role,
+          assignments,
+          pinHash,
+          aktif: true,
+          pinHarusDiganti: true,
+          dibuat: now,
+          diubah: now
+        });
+      } else {
+        await uRef.update({
+          nama,
+          role,
+          assignments,
+          diubah: now
+        });
+      }
+      imported++;
+    }
+
+    await this.audit(caller, 'USER_IMPORT', `${imported} Pengguna`, 'Import massal');
     return await this.getUsers();
   },
 

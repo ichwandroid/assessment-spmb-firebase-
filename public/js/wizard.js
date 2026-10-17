@@ -1,5 +1,5 @@
-﻿  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
- * JS_Wizard.html â€” Wizard Assessment (role & ownership aware)
+  /* â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+ * JS_Wizard.html  Wizard Assessment (role & ownership aware)
  * Staff (Koordinator/Admin): semua sentra + Submit Final.
  * Assessor: sentra tugas yang belum diklaim rekan lain.
  * â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â• */
@@ -22,9 +22,15 @@ const ARROW_L = '<svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="cu
 
 function wizSteps() {
   const steps = [{ type: 'data', short: 'Data', full: 'Data Peserta' }];
+  const asg = (Auth.user && Auth.user.assignments) || [];
   state.schema.sentra.forEach(s => {
-    if (Auth.isStaff()) { steps.push({ type: 'sentra', sid: s.id, short: SENTRA_SHORT[s.id] || s.singkat, full: s.nama }); return; }
-    if ((Auth.user.assignments || []).indexOf(s.id) < 0) return;
+    if (Auth.isStaff() || asg.length === 0) {
+      const e = WZ && WZ.data && WZ.data.meta && WZ.data.meta.sentra[s.id];
+      if (!Auth.isStaff() && e && e.owner && e.owner !== Auth.user.username) return;
+      steps.push({ type: 'sentra', sid: s.id, short: SENTRA_SHORT[s.id] || s.singkat, full: s.nama });
+      return;
+    }
+    if (asg.indexOf(s.id) < 0) return;
     const e = WZ && WZ.data && WZ.data.meta && WZ.data.meta.sentra[s.id];
     if (e && e.owner && e.owner !== Auth.user.username) return;
     steps.push({ type: 'sentra', sid: s.id, short: SENTRA_SHORT[s.id] || s.singkat, full: s.nama });
@@ -92,12 +98,15 @@ function wizLocked(sid) {
   const st = WZ.data.meta.sentra[sid] || {};
   if (st.status === 'FINAL') return true;
   if (st.owner && st.owner !== Auth.user.username) return true;
+  const asg = (Auth.user && Auth.user.assignments) || [];
+  if (asg.length > 0 && asg.indexOf(sid) < 0) return true;
   return false;
 }
 function sentraMineInWiz(sid) {
   if (!Auth.user) return false;
   if (Auth.isStaff()) return true;
-  if ((Auth.user.assignments || []).indexOf(sid) < 0) return false;
+  const asg = Auth.user.assignments || [];
+  if (asg.length > 0 && asg.indexOf(sid) < 0) return false;
   const e = WZ && WZ.data && WZ.data.meta && WZ.data.meta.sentra[sid];
   return !e || !e.owner || e.owner === Auth.user.username;
 }
@@ -171,7 +180,7 @@ function wizUpdateTitle() {
   const tag = $('#wiz-mode-tag'), t = $('#wiz-title');
   if (tag) tag.textContent = WZ.submitted ? 'Assessment Selesai'
     : (WZ.id ? (st.type === 'sentra' && wizLocked(st.sid) ? 'Sentra Terkunci' : 'Melanjutkan ' + WZ.id) : 'Assessment Baru');
-  if (t) t.textContent = (WZ.nama ? WZ.nama + ' â€” ' : '') + st.full;
+  if (t) t.textContent = (WZ.nama ? WZ.nama + '  ' : '') + st.full;
 }
 function renderPills() {
   const el = $('#wiz-pills'); if (!el || !WZ) return;
@@ -261,7 +270,7 @@ function pesertaListHtml(q) {
     '<span class="w-9 h-9 rounded-xl bg-teal-50 text-teal-600 grid place-items-center font-extrabold text-[11px] shrink-0">' + esc(inisial(p.nama)) + '</span>' +
     '<span class="flex-1 min-w-0">' +
     '<span class="block font-bold text-[13px] leading-snug text-slate-800 truncate">' + esc(p.nama) + '</span>' +
-    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">No. ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? ' â€¢ ' + esc(p.asal_tk) : '') + '</span>' +
+    '<span class="block text-[11px] text-slate-400 truncate mt-0.5">No. ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? ' | ' + esc(p.asal_tk) : '') + '</span>' +
     '</span>' +
     (p.jumlah_assessment ? '<span class="badge bg-blue-50 text-blue-600 shrink-0">' + p.jumlah_assessment + 'Ã—</span>' : '') +
     '<svg class="w-4 h-4 text-slate-300 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>' +
@@ -285,10 +294,12 @@ function stepDataHtml() {
       '<span class="w-11 h-11 rounded-2xl bg-teal-500 text-white grid place-items-center font-extrabold text-sm shrink-0">' + esc(inisial(WZ.nama)) + '</span>' +
       '<div class="flex-1 min-w-0">' +
       '<p class="font-extrabold text-slate-800 truncate">' + esc(WZ.nama) + '</p>' +
-      '<p class="text-xs text-slate-500 truncate">No. ' + esc(WZ.nomor || '-') + (WZ.asal_tk ? ' â€¢ ' + esc(WZ.asal_tk) : '') + '</p></div>' +
+      '<p class="text-xs text-slate-500 truncate">No. ' + esc(WZ.nomor || '-') + (WZ.asal_tk ? ' | ' + esc(WZ.asal_tk) : '') + '</p></div>' +
       '<span class="badge bg-teal-600 text-white shrink-0">' + ic('check', 'w-3 h-3') + ' Terpilih</span>' +
       (!WZ.id ? '<button class="btn-soft !px-3 !py-2 !text-xs shrink-0" onclick="wizGantiPeserta()">Ganti</button>' : '') +
       '</div>' +
+      '<div class="mt-4"><button type="button" class="btn-primary w-full !py-3.5 flex items-center justify-center gap-2 text-sm font-bold shadow-lg shadow-teal-600/25 active:scale-[0.99] transition" onclick="wizNext()">' +
+      'Buka Form Penilaian & Soal ' + ARROW_R + '</button></div>' +
       (WZ.id ? '<p class="text-[11px] text-slate-400 mt-2">Peserta tidak dapat diganti setelah assessment dibuat (1 assessment per peserta).</p>' : '');
   } else {
     html += '<div class="grid grid-cols-2 gap-2 mt-4 bg-slate-100 rounded-2xl p-1.5">' +
@@ -299,7 +310,7 @@ function stepDataHtml() {
         '<div><label class="label">Nama Peserta Didik *</label>' +
         '<input id="f-nama" class="input" value="' + esc(pb.nama) + '" oninput="wizField(\'nb_nama\', this.value)" placeholder="Nama lengkap ananda"></div>' +
         '<div class="grid sm:grid-cols-2 gap-3">' +
-        '<div><label class="label">Nomor Peserta</label><input class="input" value="' + esc(pb.nomor) + '" oninput="wizField(\'nb_nomor\', this.value)" placeholder="Opsional â€” cth: PPDB-007"></div>' +
+        '<div><label class="label">Nomor Peserta</label><input class="input" value="' + esc(pb.nomor) + '" oninput="wizField(\'nb_nomor\', this.value)" placeholder="Opsional  cth: PPDB-007"></div>' +
         '<div><label class="label">Asal TK / RA / PAUD</label><input class="input" value="' + esc(pb.asal_tk) + '" oninput="wizField(\'nb_asal_tk\', this.value)" placeholder="Opsional"></div>' +
         '</div></div>';
     } else {
@@ -343,7 +354,7 @@ async function wizPilihPeserta(id) {
     if (ex) {
       const buka = await confirmModal({
         title: 'Assessment sudah ada',
-        html: '<p class="text-sm">' + esc(p.nama) + ' sudah memiliki assessment <b>' + esc(ex.id) + '</b> (' + (ex.status === 'SUBMITTED' ? 'Selesai' : ex.status === 'SIAP_REVIEW' ? 'Siap Review' : 'Draft') + '). Satu peserta hanya boleh satu assessment â€” buka yang ada?</p>',
+        html: '<p class="text-sm">' + esc(p.nama) + ' sudah memiliki assessment <b>' + esc(ex.id) + '</b> (' + (ex.status === 'SUBMITTED' ? 'Selesai' : ex.status === 'SIAP_REVIEW' ? 'Siap Review' : 'Draft') + '). Satu peserta hanya boleh satu assessment  buka yang ada?</p>',
         confirmText: 'Buka'
       });
       if (buka) {
@@ -355,8 +366,17 @@ async function wizPilihPeserta(id) {
   WZ.id_peserta = p.id_peserta;
   WZ.nama = p.nama; WZ.nomor = p.nomor_peserta; WZ.asal_tk = p.asal_tk;
   WZ.mode = 'lama'; WZ.pesertaBaru = null;
-  markDirty(); renderStep(); renderBar();
-  toast('Peserta dipilih: ' + p.nama, 'success', 1800);
+  markDirty();
+  WZ.steps = wizSteps();
+
+  if (WZ.steps.length > 1 && WZ.steps[1].type === 'sentra') {
+    goStep(1);
+    toast('Memulai penilaian: ' + p.nama, 'success', 2200);
+  } else {
+    renderStep();
+    renderBar();
+    toast('Peserta dipilih: ' + p.nama, 'success', 1800);
+  }
 }
 function wizGantiPeserta() {
   WZ.id_peserta = null; WZ.nama = ''; WZ.nomor = ''; WZ.asal_tk = '';
@@ -381,7 +401,7 @@ async function wizEnsurePeserta() {
       if (f) { f.focus(); f.classList.add('!border-rose-400', '!ring-2', '!ring-rose-200'); }
       return false;
     }
-    const btn = $('#wiz-next-btn'); setBtnLoading(btn, true, 'Menyimpan pesertaâ€¦');
+    const btn = $('#wiz-next-btn'); setBtnLoading(btn, true, 'Menyimpan peserta...');
     try {
       const res = await api('savePeserta', { nama: pb.nama, nomor: pb.nomor, asal_tk: pb.asal_tk });
       const p = res.peserta;
@@ -411,7 +431,7 @@ function stepSentraHtml(sid) {
     '<div class="relative flex items-center gap-4">' +
     '<span class="w-12 h-12 rounded-2xl bg-white/15 grid place-items-center shrink-0">' + ic(s.ikon, 'w-6 h-6') + '</span>' +
     '<div class="flex-1 min-w-0">' +
-    '<p class="text-[10px] font-extrabold uppercase tracking-widest text-white/75">' + s.bab + ' Â· Observasi</p>' +
+    '<p class="text-[10px] font-extrabold uppercase tracking-widest text-white/75">' + s.bab + '  Observasi</p>' +
     '<h2 class="text-lg sm:text-xl font-extrabold leading-tight truncate mt-0.5">' + esc(s.nama) + '</h2>' +
     '</div>' +
     '<span id="wiz-hero-rerata" class="badge bg-white/20 text-white shrink-0 !px-3 !py-1.5">Rerata: ' + (rv != null ? rv : 'â€“') + '</span>' +
@@ -424,7 +444,7 @@ function stepSentraHtml(sid) {
   if (st.status === 'FINAL') {
     html += Auth.isStaff()
       ? '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('info', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 leading-relaxed">Sentra ini sudah difinalisasi oleh <b>' + esc(st.assessor) + '</b>. Sebagai Koordinator/Admin Anda tetap dapat mengubah.</p></div>'
-      : '<div class="card border-emerald-200 bg-emerald-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-emerald-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-emerald-800 leading-relaxed">âœ“ Difinalisasi oleh <b>' + esc(st.assessor) + '</b>' + (st.waktu ? ' â€¢ ' + esc(st.waktu) : '') + ' â€” terkunci. Hubungi Koordinator untuk membuka.</p></div>';
+      : '<div class="card border-emerald-200 bg-emerald-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-emerald-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-emerald-800 leading-relaxed">âœ“ Difinalisasi oleh <b>' + esc(st.assessor) + '</b>' + (st.waktu ? ' | ' + esc(st.waktu) : '') + '  terkunci. Hubungi Koordinator untuk membuka.</p></div>';
   } else if (st.owner) {
     if (Auth.isStaff()) {
       html += '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 flex-1 leading-relaxed">Sentra ini diklaim oleh <b>' + esc(st.ownerName || st.owner) + '</b>. Sebagai Koordinator/Admin Anda tetap dapat mengubah.</p></div>';
@@ -470,7 +490,7 @@ function materiItemsHtml(m, d, r) {
         [3, 2, 1].map(val =>
           '<button type="button" class="score-chip score-chip-rubric ' + (v === val ? 'on' : '') + '" data-val="' + val + '" ' +
           'aria-pressed="' + (v === val ? 'true' : 'false') + '" ' +
-          'aria-label="' + esc(it.nama + ' â€” ' + val + ' ' + scoreLabel(m, val) + (scoreDescription(m, it, '', val) ? '. ' + scoreDescription(m, it, '', val) : '')) + '" ' +
+          'aria-label="' + esc(it.nama + '  ' + val + ' ' + scoreLabel(m, val) + (scoreDescription(m, it, '', val) ? '. ' + scoreDescription(m, it, '', val) : '')) + '" ' +
           'onclick="wizScore(\'' + m.id + '\',\'' + it.id + '\',\'\',' + val + ',this)">' +
           '<span>' + val + '</span><span class="lbl">' + esc(scoreLabel(m, val)) + '</span>' +
           (scoreDescription(m, it, '', val) ? '<span class="rubric-desc" title="' + esc(scoreDescription(m, it, '', val)) + '">' + esc(scoreDescription(m, it, '', val)) + '</span>' : '') + '</button>').join('') +
@@ -489,11 +509,11 @@ function materiItemsHtml(m, d, r) {
         const v = num(cell[a.id]);
         return '<div class="flex items-center justify-between gap-3 bg-slate-50 rounded-xl px-3.5 py-2.5">' +
           '<span class="text-xs font-bold text-slate-600">' + esc(a.nama) + '</span>' +
-          '<div class="grid grid-cols-3 gap-1.5 w-[68%] max-w-[280px] shrink-0" role="radiogroup" aria-label="' + esc(it.nama + ' â€” ' + a.nama) + '" data-scg="' + m.id + '|' + it.id + '|' + a.id + '">' +
+          '<div class="grid grid-cols-3 gap-1.5 w-[68%] max-w-[280px] shrink-0" role="radiogroup" aria-label="' + esc(it.nama + '  ' + a.nama) + '" data-scg="' + m.id + '|' + it.id + '|' + a.id + '">' +
           [3, 2, 1].map(val =>
             '<button type="button" class="score-chip mini score-chip-rubric ' + (v === val ? 'on' : '') + '" data-val="' + val + '" ' +
             'aria-pressed="' + (v === val ? 'true' : 'false') + '" ' +
-            'aria-label="' + esc(a.nama + ' â€” ' + val + ' ' + scoreLabel(m, val) + (scoreDescription(m, it, a.id, val) ? '. ' + scoreDescription(m, it, a.id, val) : '')) + '" ' +
+            'aria-label="' + esc(a.nama + '  ' + val + ' ' + scoreLabel(m, val) + (scoreDescription(m, it, a.id, val) ? '. ' + scoreDescription(m, it, a.id, val) : '')) + '" ' +
             'onclick="wizScore(\'' + m.id + '\',\'' + it.id + '\',\'' + a.id + '\',' + val + ',this)"><span>' + val + '</span><span class="lbl">' + esc(scoreLabel(m, val)) + '</span>' +
             (scoreDescription(m, it, a.id, val) ? '<span class="rubric-desc" title="' + esc(scoreDescription(m, it, a.id, val)) + '">' + esc(scoreDescription(m, it, a.id, val)) + '</span>' : '') + '</button>').join('') +
           '</div></div>';
@@ -510,7 +530,7 @@ function materiCardHtml(m, mi, sid) {
   return '<div class="materi-card card ' + (mi === 0 ? 'mt-4 ' : '') + 'mb-4 anim-in ' + (isOpen ? 'open ' : '') + (wizLocked(sid) ? 'locked' : '') + '" id="mc-' + m.id + '" style="scroll-margin-top:140px">' +
     '<button type="button" class="w-full flex items-center gap-3.5 px-4 py-4 sm:px-5 text-left" onclick="wizToggle(\'' + m.id + '\')">' +
     '<div class="flex-1 min-w-0">' +
-    '<p class="font-extrabold text-sm sm:text-[15px] text-slate-800 leading-snug">' + m.no + ' Â· ' + esc(m.nama) + '</p>' +
+    '<p class="font-extrabold text-sm sm:text-[15px] text-slate-800 leading-snug">' + m.no + '  ' + esc(m.nama) + '</p>' +
     (m.catatanKaki ? '<p class="text-[11px] text-slate-400 mt-1 leading-snug pr-2">' + esc(m.catatanKaki) + '</p>' : '') +
     '</div>' +
     '<span id="mprog-' + m.id + '" class="badge shrink-0 !px-3 !py-1.5 ' + (r.lengkap ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600') + '">' + r.terisi + '/' + r.jumlahSel + '</span>' +
@@ -523,9 +543,9 @@ function materiCardHtml(m, mi, sid) {
     '<div class="flex items-center justify-between gap-3 mt-2">' +
     '<span class="text-[10px] font-bold text-slate-400">' + (m.pilihTerbaik ? 'Skor = ' + m.pilihTerbaik + ' item terbaik' : 'Skor perolehan') + '</span>' +
     '<span id="mpersen-' + m.id + '" class="text-[11px] font-extrabold text-right ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600') + '">' +
-    r.skor + '/' + r.maks + (r.lengkap ? ' Â· Nilai ' + r.persen + '%' : ' Â· belum lengkap') + '</span>' +
+    r.skor + '/' + r.maks + (r.lengkap ? '  Nilai ' + r.persen + '%' : '  belum lengkap') + '</span>' +
     '</div>' +
-    (m.tipe !== 'tunggal' ? '<p class="text-[10px] font-bold text-slate-400 mt-2.5">Skor: 3 = ' + esc(scoreLabel(m, 3)) + ' Â· 2 = ' + esc(scoreLabel(m, 2)) + ' Â· 1 = ' + esc(scoreLabel(m, 1)) + '</p>' : '') +
+    (m.tipe !== 'tunggal' ? '<p class="text-[10px] font-bold text-slate-400 mt-2.5">Skor: 3 = ' + esc(scoreLabel(m, 3)) + '  2 = ' + esc(scoreLabel(m, 2)) + '  1 = ' + esc(scoreLabel(m, 1)) + '</p>' : '') +
     '<div class="mt-3">' + materiItemsHtml(m, d, r) + '</div>' +
     '<div class="mt-4">' +
     '<label class="label">Informasi Tambahan / Komentar / Catatan</label>' +
@@ -537,7 +557,7 @@ function materiCardHtml(m, mi, sid) {
 function sentraCatatanHtml(s, sid) {
   const v = (WZ.data.catatanSentra || {})[sid] || '';
   return '<div class="card p-5 sm:p-6 anim-in ' + (wizLocked(sid) ? 'locked' : '') + '">' +
-    '<label class="label !mb-1">Informasi Tambahan â€” ' + esc(s.nama) + '</label>' +
+    '<label class="label !mb-1">Informasi Tambahan  ' + esc(s.nama) + '</label>' +
     '<p class="text-[11px] text-slate-400 leading-relaxed">Akan muncul pada kolom "Informasi Tambahan" di BAB IV (Total Nilai).</p>' +
     '<textarea rows="3" class="input resize-none mt-3" placeholder="Ringkasan observasi sentra ini..." oninput="wizCatatanSentra(\'' + sid + '\', this.value)">' + esc(v) + '</textarea>' +
     '</div>';
@@ -560,7 +580,7 @@ function sentraReviewCard(s) {
   } else {
     const claimTxt = st.owner
       ? (st.owner === Auth.user.username ? 'Dikerjakan oleh Anda' : 'Dikerjakan oleh ' + (st.ownerName || st.owner))
-      : 'Belum diklaim â€” mengisi skor otomatis menjadikannya milik Anda';
+      : 'Belum diklaim  mengisi skor otomatis menjadikannya milik Anda';
     topHtml = '<div class="flex items-center gap-2 flex-wrap">' +
       '<span class="badge ' + (st.owner === Auth.user.username ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-500') + '">' + esc(claimTxt) + '</span>' +
       '<button class="btn-primary !py-2.5 !text-xs ' + (kurang ? 'opacity-40 pointer-events-none' : '') + '" onclick="wizFinalize(\'' + s.id + '\')">' + ic('check', 'w-4 h-4') + ' Finalisasi ' + esc(SENTRA_SHORT[s.id] || s.singkat || s.nama) + '</button>' +
@@ -569,14 +589,14 @@ function sentraReviewCard(s) {
   }
   return '<div class="card p-5 anim-in mt-3">' +
     '<div class="flex items-center justify-between gap-2 flex-wrap">' +
-    '<h3 class="font-extrabold text-slate-800">' + s.bab + ' â€” ' + esc(s.nama) + '</h3>' +
+    '<h3 class="font-extrabold text-slate-800">' + s.bab + '  ' + esc(s.nama) + '</h3>' +
     '<span class="badge ' + (h.sentra[s.id] != null ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-400') + '">Rerata ' + (h.sentra[s.id] != null ? h.sentra[s.id] : 'â€“') + '</span></div>' +
     '<div class="mt-2 divide-y divide-slate-100">' + s.materi.map(m => {
       const r = h.materi[m.id];
       return '<button type="button" class="w-full flex items-center gap-3 py-2.5 text-left" onclick="wizGoMateri(\'' + m.id + '\')">' +
         '<span class="w-1.5 h-8 rounded-full shrink-0 ' + (r.lengkap ? 'bg-emerald-400' : 'bg-amber-400') + '"></span>' +
-        '<span class="flex-1 min-w-0"><span class="block text-sm font-bold text-slate-700 truncate">' + m.no + ' Â· ' + esc(m.nama) + '</span>' +
-        '<span class="block text-[11px] text-slate-400">Skor ' + r.skor + '/' + r.maks + (r.lengkap ? ' â€¢ Nilai ' + r.persen + '%' : ' â€¢ belum lengkap') + '</span></span>' +
+        '<span class="flex-1 min-w-0"><span class="block text-sm font-bold text-slate-700 truncate">' + m.no + '  ' + esc(m.nama) + '</span>' +
+        '<span class="block text-[11px] text-slate-400">Skor ' + r.skor + '/' + r.maks + (r.lengkap ? ' | Nilai ' + r.persen + '%' : ' | belum lengkap') + '</span></span>' +
         '<svg class="w-4 h-4 text-slate-300 shrink-0 -rotate-90" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
         '</button>';
     }).join('') + '</div>' +
@@ -586,13 +606,13 @@ function otherSentraCard(s) {
   const st = (WZ.data.meta.sentra[s.id]) || {};
   const assignedToMe = (Auth.user.assignments || []).indexOf(s.id) >= 0;
   let desc;
-  if (st.status === 'FINAL') desc = 'âœ“ Difinalisasi oleh ' + (st.assessor || 'â€”');
-  else if (assignedToMe && st.owner) desc = ic('lock', 'w-3 h-3') + ' Sedang dikerjakan oleh ' + esc(st.ownerName || st.owner) + ' â€” tidak dapat Anda handle';
-  else desc = 'Belum final â€” dinilai assessor lain';
+  if (st.status === 'FINAL') desc = 'âœ“ Difinalisasi oleh ' + (st.assessor || '');
+  else if (assignedToMe && st.owner) desc = ic('lock', 'w-3 h-3') + ' Sedang dikerjakan oleh ' + esc(st.ownerName || st.owner) + '  tidak dapat Anda handle';
+  else desc = 'Belum final  dinilai assessor lain';
   return '<div class="card p-4 anim-in mt-3 flex items-center gap-3 bg-slate-50/60">' +
     '<span class="w-9 h-9 rounded-xl bg-slate-200 text-slate-500 grid place-items-center shrink-0">' + ic('lock', 'w-4 h-4') + '</span>' +
     '<div class="flex-1 min-w-0">' +
-    '<p class="text-sm font-bold text-slate-600">' + s.bab + ' â€” ' + esc(s.nama) + '</p>' +
+    '<p class="text-sm font-bold text-slate-600">' + s.bab + '  ' + esc(s.nama) + '</p>' +
     '<p class="text-[11px] text-slate-400">' + desc + '</p>' +
     '</div></div>';
 }
@@ -601,20 +621,20 @@ function bab4Preview(h) {
   const cs = WZ.data.catatanSentra || {};
   const rows = state.schema.sentra.map((s, i) => ['4.' + (i + 1), s.nama, h.sentra[s.id], cs[s.id], s.id]);
   return '<div class="card p-5 anim-in mt-3">' +
-    '<h3 class="font-extrabold text-slate-800">BAB IV â€” Total Nilai (Preview)</h3>' +
+    '<h3 class="font-extrabold text-slate-800">BAB IV  Total Nilai (Preview)</h3>' +
     '<div class="mt-3 overflow-x-auto"><table class="w-full text-sm min-w-[420px]">' +
     '<thead><tr class="text-left text-[10px] uppercase tracking-wide text-slate-400"><th class="pb-2">No</th><th class="pb-2">Materi</th><th class="pb-2 text-right">Rerata</th><th class="pb-2 pl-4">Info Tambahan</th></tr></thead>' +
     '<tbody class="divide-y divide-slate-100">' +
     rows.map(r => {
       const show = staff || sentraMineInWiz(r[4]);
       const st = WZ.data.meta.sentra[r[4]];
-      const val = show ? (r[2] == null ? 'â€“' : r[2]) : (st.status === 'FINAL' ? 'âœ“ Final' : 'â€¢');
+      const val = show ? (r[2] == null ? 'â€“' : r[2]) : (st.status === 'FINAL' ? 'âœ“ Final' : '|');
       return '<tr><td class="py-2 font-bold text-slate-400">' + r[0] + '</td><td class="py-2 font-bold text-slate-700">' + esc(r[1]) + '</td>' +
         '<td class="py-2 text-right font-extrabold ' + (show && r[2] != null ? 'text-teal-700' : 'text-slate-300') + '">' + val + '</td>' +
-        '<td class="py-2 pl-4 text-xs text-slate-500 max-w-[220px] truncate">' + (show ? esc(r[3] || '-') : 'â€”') + '</td></tr>';
+        '<td class="py-2 pl-4 text-xs text-slate-500 max-w-[220px] truncate">' + (show ? esc(r[3] || '-') : '') + '</td></tr>';
     }).join('') +
     '<tr class="bg-slate-50/70"><td></td><td class="py-2.5 font-extrabold text-slate-800">Rerata Umum (Nilai Akhir)</td>' +
-    '<td class="py-2.5 text-right font-extrabold text-teal-700">' + (staff && h.nilaiAkhir != null ? h.nilaiAkhir : 'â€¢') + '</td>' +
+    '<td class="py-2.5 text-right font-extrabold text-teal-700">' + (staff && h.nilaiAkhir != null ? h.nilaiAkhir : '|') + '</td>' +
     '<td class="py-2.5 pl-4 text-xs text-slate-400">' + (staff ? 'Calistung: ' + (h.calistung == null ? 'â€“' : h.calistung) : 'Dihitung saat submit final') + '</td></tr>' +
     '</tbody></table></div>' +
     (staff
@@ -642,7 +662,7 @@ function stepReviewHtml() {
     reviewRow('Asal TK/RA/PAUD', WZ.asal_tk || '-') +
     reviewRow('Pembuat', WZ.creator || '-') +
     reviewRow('Tanggal', fmtTanggal(WZ.tanggal)) +
-    reviewRow('Status', WZ.id ? (WZ.id + ' â€” ' + (WZ.data.meta && Object.values(WZ.data.meta.sentra).every(x => x.status === 'FINAL') ? 'Siap Review' : 'Draft')) : 'Baru') +
+    reviewRow('Status', WZ.id ? (WZ.id + '  ' + (WZ.data.meta && Object.values(WZ.data.meta.sentra).every(x => x.status === 'FINAL') ? 'Siap Review' : 'Draft')) : 'Baru') +
     '</div></div>';
 
   const mySentras = WZ.steps.filter(x => x.type === 'sentra').map(x => state.schema.sentra.find(s => s.id === x.sid));
@@ -671,7 +691,7 @@ function stepDoneHtml() {
       '<div id="done-burst" class="absolute inset-0 pointer-events-none"></div>' +
       '<div id="done-check-wrap" class="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-emerald-400 to-teal-500 grid place-items-center text-white shadow-xl shadow-emerald-500/30">' + ic('check', 'w-10 h-10') + '</div>' +
       '<h2 class="mt-4 text-xl font-extrabold text-slate-800">Assessment Berhasil Disimpan</h2>' +
-      '<p class="text-sm text-slate-500 mt-1">' + esc(WZ.nama) + ' â€¢ No. ' + esc(WZ.nomor || WZ.id_peserta) + '</p>' +
+      '<p class="text-sm text-slate-500 mt-1">' + esc(WZ.nama) + ' | No. ' + esc(WZ.nomor || WZ.id_peserta) + '</p>' +
       '<div class="mt-4 flex flex-col items-center gap-1">' +
       '<span class="text-[10px] font-extrabold uppercase tracking-widest text-slate-400">Kode Hasil Asesmen</span>' +
       (h.kode ? '<span id="done-kode" class="kode-badge kode-' + h.kode + '">' + h.kode + '</span>' : '<span id="done-kode" class="badge bg-slate-100 text-slate-400">â€“</span>') +
@@ -682,7 +702,7 @@ function stepDoneHtml() {
       state.schema.sentra.map(s => statMini(s.singkat || s.nama, h.sentra[s.id] != null ? h.sentra[s.id] : '-')).join('') +
       statMini('Calistung', h.calistung != null ? h.calistung : 'â€“') +
       '</div>' +
-      '<p class="text-[11px] text-slate-400 mt-4">ID: ' + esc(WZ.id) + ' â€¢ Pembuat: ' + esc(WZ.creator) + ' â€¢ ' + fmtTanggal(WZ.tanggal) + '</p>' +
+      '<p class="text-[11px] text-slate-400 mt-4">ID: ' + esc(WZ.id) + ' | Pembuat: ' + esc(WZ.creator) + ' | ' + fmtTanggal(WZ.tanggal) + '</p>' +
       '</div>' +
       '<div class="grid gap-2.5 mt-4">' +
       '<button class="btn-primary done-btn" onclick="showHasilById(\'' + esc(WZ.id) + '\')">' + ic('eye', 'w-5 h-5') + ' Lihat Hasil Lengkap</button>' +
@@ -699,13 +719,13 @@ function stepDoneHtml() {
       return '<div class="flex items-center gap-3 p-3 rounded-2xl bg-emerald-50/70 border border-emerald-100">' +
         '<span class="w-9 h-9 rounded-xl bg-emerald-500 text-white grid place-items-center shrink-0">' + ic('check', 'w-4 h-4') + '</span>' +
         '<div class="flex-1 min-w-0"><p class="font-bold text-sm text-slate-700">' + esc(s.nama) + '</p>' +
-        '<p class="text-[11px] text-slate-400">Difinalisasi' + (st.waktu ? ' â€¢ ' + esc(st.waktu) : '') + '</p></div></div>';
+        '<p class="text-[11px] text-slate-400">Difinalisasi' + (st.waktu ? ' | ' + esc(st.waktu) : '') + '</p></div></div>';
     }).join('');
   return '<div class="max-w-lg mx-auto text-center">' +
     '<div class="card p-7 anim-in">' +
     '<div class="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-teal-400 to-emerald-500 grid place-items-center text-white shadow-xl shadow-teal-500/30">' + ic('check', 'w-10 h-10') + '</div>' +
     '<h2 class="mt-4 text-xl font-extrabold text-slate-800">Penilaian Anda Sudah Difinalisasi</h2>' +
-    '<p class="text-sm text-slate-500 mt-1">' + esc(WZ.nama) + ' â€¢ No. ' + esc(WZ.nomor || WZ.id_peserta) + '</p>' +
+    '<p class="text-sm text-slate-500 mt-1">' + esc(WZ.nama) + ' | No. ' + esc(WZ.nomor || WZ.id_peserta) + '</p>' +
     '<div class="mt-4 grid gap-2 text-left">' + mine + '</div>' +
     '<div class="mt-4 p-4 rounded-2xl bg-slate-50 text-xs text-slate-500 leading-relaxed text-left">' +
     ic('info', 'w-4 h-4 inline -mt-0.5') + ' Terima kasih! Setelah semua sentra final, <b>Koordinator Assesmen</b> akan melakukan <b>Submit Final</b> dan mencetak laporan.</div>' +
@@ -801,7 +821,7 @@ function wizUpdateMateriUi(mid) {
   }
   const pct = $('#mpersen-' + mid);
   if (pct) {
-    pct.textContent = r.skor + '/' + r.maks + (r.lengkap ? ' Â· Nilai ' + r.persen + '%' : ' Â· belum lengkap');
+    pct.textContent = r.skor + '/' + r.maks + (r.lengkap ? '  Nilai ' + r.persen + '%' : '  belum lengkap');
     pct.className = 'text-[11px] font-extrabold ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600');
   }
   if (m.pilihTerbaik) {
@@ -866,7 +886,7 @@ async function wizAutosave(force) {
     if (msg === 'SESSION_EXPIRED' || msg === 'PIN_DEFAULT' ||
         msg.indexOf('Akses ditolak') >= 0 || msg.indexOf('tidak ditugaskan') >= 0) {
       terminal = true;
-      if (msg === 'PIN_DEFAULT') { toast('Ganti PIN default Anda dulu â€” perubahan belum tersimpan.', 'error'); if (typeof showPinGate === 'function') showPinGate(); }
+      if (msg === 'PIN_DEFAULT') { toast('Ganti PIN default Anda dulu  perubahan belum tersimpan.', 'error'); if (typeof showPinGate === 'function') showPinGate(); }
       else if (msg === 'SESSION_EXPIRED') { /* forceLogin sudah menangani */ }
       else toast(msg, 'error');
     } else if (msg.indexOf('ASSESSMENT_EXISTS:') === 0) {
@@ -898,7 +918,7 @@ async function wizAutosave(force) {
       const pesan = 'Autosave gagal (' + WZ.autoFails + '/3): ' + msg;
       if (WZ.autoFails >= 3) {
         terminal = true;
-        toast(pesan + ' â€” simpan manual untuk mencoba lagi.', 'error');
+        toast(pesan + '  simpan manual untuk mencoba lagi.', 'error');
       } else if (now - lastAutoErr > 10000) {
         lastAutoErr = now;
         toast(pesan, 'error');
@@ -916,7 +936,7 @@ async function wizAutosave(force) {
 }
 async function wizSaveDraftManual() {
   if (!WZ.id_peserta) { toast('Lengkapi data peserta dulu.', 'info'); return; }
-  const btn = $('#wiz-draft-btn'); setBtnLoading(btn, true, 'Menyimpanâ€¦');
+  const btn = $('#wiz-draft-btn'); setBtnLoading(btn, true, 'Menyimpan...');
   const ok = await wizAutosave(true);
   setBtnLoading(btn, false);
   toast(ok ? 'Draft tersimpan.' : 'Gagal menyimpan draft.', ok ? 'success' : 'error');
@@ -972,7 +992,7 @@ function wizScrollToMateri(mid) {
 /* Susun ulang daftar langkah tanpa kehilangan posisi.
  * BUG LAMA: WZ.steps di-refresh tanpa menyesuaikan WZ.step. Kalau sentra yang
  * sedang dibuka hilang dari daftar (diklaim rekan / di-release Koordinator),
- * indeks yang sama menunjuk sentra BERBEDA tanpa peringatan â€” skor bisa
+ * indeks yang sama menunjuk sentra BERBEDA tanpa peringatan  skor bisa
  * terketik ke BAB yang salah. */
 function wizRefreshSteps() {
   const activeSid = (WZ.steps && WZ.steps[WZ.step] && WZ.steps[WZ.step].type === 'sentra')
@@ -1002,7 +1022,7 @@ async function wizFinalize(sid) {
   if (typeof pinPending === 'function' && pinPending()) { showPinGate(); return; }
   if (!WZ.id) {
     const saved = await wizAutosave(true);
-    if (!saved) { toast('Gagal menyimpan â€” coba lagi.', 'error'); return; }
+    if (!saved) { toast('Gagal menyimpan  coba lagi.', 'error'); return; }
   }
   try {
     const res = await api('finalizeSentra', WZ.id, sid);
@@ -1049,14 +1069,14 @@ async function wizSubmitFinal() {
       '<div class="flex justify-between"><span class="text-slate-500">Peserta</span><b>' + esc(WZ.nama) + '</b></div>' +
       '<div class="flex justify-between"><span class="text-slate-500">Pembuat</span><b>' + esc(WZ.creator) + '</b></div>' +
       '<div class="flex justify-between"><span class="text-slate-500">Nilai Akhir</span><b>' + h.nilaiAkhir + '</b></div>' +
-      '<div class="flex justify-between"><span class="text-slate-500">Kode</span><b>' + h.kode + ' â€” ' + esc(h.kodeLabel) + '</b></div>' +
+      '<div class="flex justify-between"><span class="text-slate-500">Kode</span><b>' + h.kode + '  ' + esc(h.kodeLabel) + '</b></div>' +
       '<div class="flex justify-between"><span class="text-slate-500">Ttd Koordinator</span><b>' + esc(Auth.user.nama) + '</b></div></div>' +
       (allFin ? '' : '<p class="text-xs text-slate-400 mt-3">Sentra yang belum difinalisasi akan ditandai final atas nama Anda.</p>') +
       '<p class="text-xs text-slate-400 mt-3">Setelah submit, data terkunci dan laporan ditandatangani atas nama Anda.</p>',
     confirmText: 'Ya, Submit'
   });
   if (!ok) return;
-  const btn = $('#wiz-submit-btn'); setBtnLoading(btn, true, 'Menyimpanâ€¦');
+  const btn = $('#wiz-submit-btn'); setBtnLoading(btn, true, 'Menyimpan...');
   try {
     const res = await api('submitAssessment', WZ.id);
     WZ.data.meta = res.assessment.data.meta;
@@ -1069,7 +1089,7 @@ async function wizSubmitFinal() {
     refreshData();
   } catch (e) {
     setBtnLoading(btn, false);
-    toast('Submit gagal: ' + e.message + ' â€” data Anda tetap tersimpan.', 'error', 6000);
+    toast('Submit gagal: ' + e.message + '  data Anda tetap tersimpan.', 'error', 6000);
   }
 }
 async function wizExit() {
