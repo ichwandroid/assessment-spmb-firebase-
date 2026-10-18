@@ -25,6 +25,28 @@ const FirebaseService = {
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
   },
 
+  isGlobalCoordinator(user) {
+    return !!user && (user.role === 'ADMIN' || user.role === 'KOORDINATOR');
+  },
+
+  canManageSentra(user, sid) {
+    return this.isGlobalCoordinator(user) ||
+      (!!user && user.role === 'KOORDINATOR_SENTRA' && (user.assignments || []).includes(sid));
+  },
+
+  priorUnfinalizedSentra(user, sid, meta) {
+    if (!user || user.role !== 'ASSESSOR') return null;
+    const current = meta.sentra[sid] || {};
+    // Sentra pertama boleh dipilih bebas. Setelah satu sentra mulai
+    // dikerjakan, sentra tersebut menjadi gerbang dan harus FINAL sebelum
+    // tim berpindah ke sentra lain.
+    if (current.owner && current.status !== 'FINAL') return null;
+    return FORM_SCHEMA.sentra.find(s => {
+      const state = meta.sentra[s.id] || {};
+      return s.id !== sid && state.owner && state.status !== 'FINAL';
+    }) || null;
+  },
+
   async audit(user, aksi, target, detail) {
     try {
       await db.collection('audit').add({
@@ -492,12 +514,34 @@ const FirebaseService = {
 
   // ════════════════ ASSESSMENT (PENILAIAN) ════════════════
   canAccessAssessment(user, assessment) {
-    if (user.role === 'ADMIN' || user.role === 'KOORDINATOR') return true;
-    const asg = user.assignments || [];
+    if (this.isGlobalCoordinator(user)) return true;
     const meta = assessment.meta || {};
     const sentras = meta.sentra || {};
-    // Assessment hanya terlihat jika pengguna masih memiliki sentra yang
-    // belum diklaim atau sudah diklaim olehnya.
+    const allSentraFinal = FORM_SCHEMA.sentra.every(s => (sentras[s.id] || {}).status === 'FINAL');
+    // Assessment yang semua sentranya sudah final (SIAP_REVIEW maupun
+    // SUBMITTED) menjadi ranah Koordinator/Admin saja.
+    if (allSentraFinal) return false;
+    if (user.role === 'KOORDINATOR_SENTRA') {
+      return (user.assignments || []).some(sid => FORM_SCHEMA.sentra.some(s => s.id === sid));
+    }
+    const asg = user.assignments || [];
+    const activeSentra = FORM_SCHEMA.sentra.find(s => {
+      const st = sentras[s.id] || {};
+      return st.owner && st.status !== 'FINAL';
+    });
+    const hasFinalSentra = FORM_SCHEMA.sentra.some(s => (sentras[s.id] || {}).status === 'FINAL');
+    // Draft lama tanpa pemilik tidak boleh menjadi draft bebas yang dapat
+    // dibuka assessor mana pun. Koordinator yang menetapkan/memindahkannya.
+    if (!activeSentra && !hasFinalSentra && assessment.status === 'DRAFT') return false;
+    // Saat satu sentra masih aktif, assessment hanya tampak bagi guru yang
+    // sedang memegangnya. Guru sentra lain baru dapat melihatnya setelah
+    // sentra aktif tersebut difinalisasi.
+    if (activeSentra) {
+      const active = sentras[activeSentra.id] || {};
+      if (active.owner.toLowerCase() !== user.username.toLowerCase()) return false;
+    }
+    // Setelah sentra aktif final, assessor pada sentra yang belum diklaim
+    // dapat melihat assessment untuk mengambil giliran berikutnya.
     return FORM_SCHEMA.sentra.some(s => {
       const st = sentras[s.id] || {};
       const assigned = asg.length === 0 || asg.includes(s.id);
@@ -509,7 +553,8 @@ const FirebaseService = {
     const snap = await db.collection('assessments').get();
     const list = [];
     const asg = user.assignments || [];
-    const isStaff = user.role === 'ADMIN' || user.role === 'KOORDINATOR';
+    const isStaff = this.isGlobalCoordinator(user);
+    const isSentraCoordinator = user.role === 'KOORDINATOR_SENTRA';
 
     snap.forEach(doc => {
       const d = doc.data();
@@ -526,15 +571,28 @@ const FirebaseService = {
       const myPending = [];
       // handledByOther: sentras claimed by another user (not me, not empty)
       const handledByOther = [];
+      // Hanya satu sentra yang boleh aktif pada satu assessment. Ini juga
+      // dipakai oleh menu Penilaian agar guru berikutnya tidak mendapat
+      // tombol "Buka" sebelum sentra aktif difinalisasi.
+      const activeSentra = FORM_SCHEMA.sentra.find(s => {
+        const st = sentras[s.id] || {};
+        return st.owner && st.status !== 'FINAL';
+      });
+      const activeState = activeSentra ? (sentras[activeSentra.id] || {}) : null;
+      const activeOwnedByOther = activeState && activeState.owner &&
+        activeState.owner.toLowerCase() !== user.username.toLowerCase();
+      if (!isStaff && !isSentraCoordinator && activeOwnedByOther) {
+        handledByOther.push({ sid: activeSentra.id, ownerName: activeState.ownerName || activeState.owner });
+      }
 
       FORM_SCHEMA.sentra.forEach(s => {
         const st = sentras[s.id] || {};
         sentraStatus[s.id] = st.status || 'DRAFT';
         sentraOwner[s.id] = { owner: st.owner || '', ownerName: st.ownerName || '' };
 
-        if (!isStaff) {
+        if (!isStaff && !isSentraCoordinator) {
           const isAssigned = asg.length === 0 || asg.includes(s.id);
-          if (isAssigned && st.status !== 'FINAL') {
+          if (!activeOwnedByOther && isAssigned && st.status !== 'FINAL') {
             const claimedByOther = st.owner && st.owner.toLowerCase() !== user.username.toLowerCase();
             if (claimedByOther) {
               handledByOther.push({ sid: s.id, ownerName: st.ownerName || st.owner });
@@ -573,8 +631,8 @@ const FirebaseService = {
         // Per-user context fields consumed by riwayatCard
         sentraStatus,
         sentraOwner,
-        myPending: isStaff ? [] : myPending,
-        handledByOther: isStaff ? [] : handledByOther
+        myPending: (isStaff || isSentraCoordinator) ? [] : myPending,
+        handledByOther: (isStaff || isSentraCoordinator) ? [] : handledByOther
       });
     });
 
@@ -636,6 +694,9 @@ const FirebaseService = {
 
     payload = payload || {};
     const isUpdate = !!payload.id;
+    if (user.role === 'KOORDINATOR_SENTRA' && !isUpdate) {
+      throw new Error('Koordinator Sentra tidak dapat membuat assessment baru.');
+    }
     const idPeserta = payload.id_peserta;
     if (!idPeserta) throw new Error('ID peserta wajib diisi.');
 
@@ -699,14 +760,25 @@ const FirebaseService = {
         Object.keys(storedData).forEach(k => {
           if (k !== 'meta' && k !== 'catatanSentra') merged[k] = storedData[k];
         });
+      } else if (user.role === 'ASSESSOR') {
+        // Klaim dibuat sejak draft pertama disimpan, bukan menunggu nilai
+        // pertama. Guru lain pada sentra yang sama hanya dapat melanjutkan
+        // setelah Koordinator Sentra memindahkan tugasnya.
+        const startingSid = String(payload.active_sentra || '');
+        if ((user.assignments || []).includes(startingSid) && merged.meta.sentra[startingSid]) {
+          merged.meta.sentra[startingSid].owner = user.username;
+          merged.meta.sentra[startingSid].ownerName = user.nama;
+        }
       }
 
       FORM_SCHEMA.sentra.forEach(s => {
         const st = merged.meta.sentra[s.id];
         const asg = user.assignments || [];
         const assigned = asg.length === 0 || asg.includes(s.id);
-        const isStaff = user.role === 'ADMIN' || user.role === 'KOORDINATOR';
-        const editable = isStaff || (assigned && st.status !== 'FINAL' && (!st.owner || st.owner === user.username));
+        const isStaff = this.isGlobalCoordinator(user);
+        const isSentraCoordinator = user.role === 'KOORDINATOR_SENTRA';
+        const blockedBy = this.priorUnfinalizedSentra(user, s.id, merged.meta);
+        const editable = isStaff || (!isSentraCoordinator && !blockedBy && assigned && st.status !== 'FINAL' && (!st.owner || st.owner === user.username));
         let part;
 
         if (editable) {
@@ -718,6 +790,9 @@ const FirebaseService = {
         } else {
           const attempted = sanitizeSentraPartial_(s, incoming);
           const storedPart = sentraPartFromData_(s, storedData);
+          if (blockedBy && JSON.stringify(attempted) !== JSON.stringify(storedPart)) {
+            throw new Error(`FINALIZE_FIRST:Finalisasi ${blockedBy.singkat || blockedBy.nama} terlebih dahulu sebelum mengisi ${s.singkat || s.nama}.`);
+          }
           // Tab yang stale tidak boleh menimpa nilai sentra yang baru saja
           // diklaim guru lain. Payload dengan data identik tetap aman untuk
           // autosave karena tidak mengubah data yang tersimpan.
@@ -789,8 +864,8 @@ const FirebaseService = {
     if (!user) throw new Error('SESSION_EXPIRED');
     if (user.pinHarusDiganti) throw new Error('PIN_DEFAULT: Ganti PIN Anda terlebih dahulu.');
 
-    const isStaff = user.role === 'ADMIN' || user.role === 'KOORDINATOR';
-    if (!isStaff && !(user.assignments || []).includes(sid)) {
+    const canManage = this.canManageSentra(user, sid);
+    if (!canManage && !(user.assignments || []).includes(sid)) {
       throw new Error('Anda tidak ditugaskan pada sentra/BAB ini.');
     }
 
@@ -810,6 +885,10 @@ const FirebaseService = {
       }
 
       const meta = sanitizeMeta_(asm.meta);
+      const blockedBy = this.priorUnfinalizedSentra(user, sid, meta);
+      if (blockedBy) {
+        throw new Error(`FINALIZE_FIRST:Finalisasi ${blockedBy.singkat || blockedBy.nama} terlebih dahulu.`);
+      }
       meta.sentra[sid].status = 'FINAL';
       meta.sentra[sid].assessor = user.nama;
       meta.sentra[sid].waktu = this.nowStr();
@@ -836,7 +915,7 @@ const FirebaseService = {
   async retractSentra(id, sid) {
     const user = this.getCurrentUser();
     if (!user) throw new Error('SESSION_EXPIRED');
-    if (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR') throw new Error('Akses ditolak — khusus Koordinator/Admin.');
+    if (!this.canManageSentra(user, sid)) throw new Error('Akses ditolak — khusus koordinator sentra yang ditugaskan.');
 
     const asmRef = db.collection('assessments').doc(id);
     return await db.runTransaction(async transaction => {
@@ -862,26 +941,41 @@ const FirebaseService = {
     });
   },
 
-  async releaseSentra(id, sid) {
+  async releaseSentra(id, sid, targetUsername) {
     const user = this.getCurrentUser();
     if (!user) throw new Error('SESSION_EXPIRED');
-    if (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR') throw new Error('Akses ditolak — khusus Koordinator/Admin.');
+    if (!this.canManageSentra(user, sid)) throw new Error('Akses ditolak — khusus koordinator sentra yang ditugaskan.');
+
+    targetUsername = String(targetUsername || '').trim().toLowerCase();
+    if (!targetUsername) throw new Error('Pilih guru tujuan untuk pemindahan tugas.');
+    const targetSnap = await db.collection('users').doc(targetUsername).get();
+    if (!targetSnap.exists) throw new Error('Guru tujuan tidak ditemukan.');
+    const target = targetSnap.data();
+    if (!target.aktif || target.role !== 'ASSESSOR' || !(target.assignments || []).includes(sid)) {
+      throw new Error('Guru tujuan harus merupakan assessor aktif yang ditugaskan pada sentra ini.');
+    }
 
     const asmRef = db.collection('assessments').doc(id);
     return await db.runTransaction(async transaction => {
       const snap = await transaction.get(asmRef);
       if (!snap.exists) throw new Error('Assessment tidak ditemukan.');
       const asm = snap.data();
+      if (asm.status === 'SUBMITTED') throw new Error('Assessment sudah SUBMITTED.');
 
       const meta = sanitizeMeta_(asm.meta);
-      meta.sentra[sid].owner = '';
-      meta.sentra[sid].ownerName = '';
+      if (!meta.sentra[sid] || meta.sentra[sid].status === 'FINAL') {
+        throw new Error('Tugas hanya dapat dipindahkan saat sentra masih berstatus DRAFT.');
+      }
+      meta.sentra[sid].status = 'DRAFT';
+      meta.sentra[sid].owner = target.username;
+      meta.sentra[sid].ownerName = target.nama;
       const log = asm.logEdit || [];
-      log.unshift(`${this.nowStr()} [RELEASE] klaim ${sid} oleh ${user.username}`);
+      log.unshift(`${this.nowStr()} [TRANSFER] ${sid} ke ${target.username} oleh ${user.username}`);
 
       transaction.update(asmRef, {
         meta,
         'data.meta': meta,
+        status: 'DRAFT',
         logEdit: log,
         waktuDiubah: this.nowStr()
       });
@@ -1011,7 +1105,7 @@ const FirebaseService = {
   // ════════════════ DASHBOARD KOORDINATOR ════════════════
   async getDashboardData() {
     const user = this.getCurrentUser();
-    if (!user || (user.role !== 'ADMIN' && user.role !== 'KOORDINATOR')) {
+    if (!user || (!this.isGlobalCoordinator(user) && user.role !== 'KOORDINATOR_SENTRA')) {
       throw new Error('Akses ditolak — khusus Koordinator / Admin.');
     }
 
@@ -1022,7 +1116,10 @@ const FirebaseService = {
 
     const totalPeserta = pesertaSnap.size;
     const asmList = [];
-    asmSnap.forEach(d => asmList.push(d.data()));
+    asmSnap.forEach(d => {
+      const assessment = d.data();
+      if (this.isGlobalCoordinator(user) || (user.assignments || []).length && (user.assignments || []).some(sid => FORM_SCHEMA.sentra.some(s => s.id === sid))) asmList.push(assessment);
+    });
 
     const countStatus = { DRAFT: 0, SIAP_REVIEW: 0, SUBMITTED: 0 };
     const countKode = { A: 0, B: 0, C: 0 };
@@ -1185,7 +1282,7 @@ const FirebaseService = {
     const nama = clampStr_(payload.nama, 80);
     const role = String(payload.role || '').toUpperCase();
     if (!username || !nama) throw new Error('Username dan nama lengkap wajib diisi.');
-    if (!['ADMIN', 'KOORDINATOR', 'ASSESSOR'].includes(role)) throw new Error('Peran tidak valid.');
+    if (!['ADMIN', 'KOORDINATOR', 'KOORDINATOR_SENTRA', 'ASSESSOR'].includes(role)) throw new Error('Peran tidak valid.');
 
     const uRef = db.collection('users').doc(username);
     const snap = await uRef.get();
@@ -1193,7 +1290,8 @@ const FirebaseService = {
     const now = this.nowStr();
 
     let assignments = Array.isArray(payload.assignments) ? payload.assignments : [];
-    if (role !== 'ASSESSOR') assignments = [];
+    if (role !== 'ASSESSOR' && role !== 'KOORDINATOR_SENTRA') assignments = [];
+    if ((role === 'ASSESSOR' || role === 'KOORDINATOR_SENTRA') && !assignments.length) throw new Error('Penugasan minimal satu sentra diperlukan untuk peran ini.');
 
     const pin = String(payload.pin || '').trim();
     if (isNew && !pin) throw new Error('PIN awal wajib diisi untuk pengguna baru.');
@@ -1242,13 +1340,13 @@ const FirebaseService = {
       const username = clampStr_(item.username, 30).toLowerCase();
       const nama = clampStr_(item.nama, 80);
       let role = String(item.role || 'ASSESSOR').toUpperCase();
-      if (!['ADMIN', 'KOORDINATOR', 'ASSESSOR'].includes(role)) role = 'ASSESSOR';
+      if (!['ADMIN', 'KOORDINATOR', 'KOORDINATOR_SENTRA', 'ASSESSOR'].includes(role)) role = 'ASSESSOR';
       const pin = String(item.pin || '1234').trim();
 
       if (!username || !nama) continue;
 
       let assignments = [];
-      if (role === 'ASSESSOR') {
+      if (role === 'ASSESSOR' || role === 'KOORDINATOR_SENTRA') {
         if (Array.isArray(item.assignments)) {
           assignments = item.assignments;
         } else if (typeof item.assignments === 'string') {

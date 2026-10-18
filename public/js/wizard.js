@@ -24,9 +24,10 @@ function wizSteps() {
   const steps = [{ type: 'data', short: 'Data', full: 'Data Peserta' }];
   const asg = (Auth.user && Auth.user.assignments) || [];
   state.schema.sentra.forEach(s => {
-    if (Auth.isStaff() || asg.length === 0) {
+    if (Auth.isStaff() || Auth.isKoordSentra() || asg.length === 0) {
       const e = WZ && WZ.data && WZ.data.meta && WZ.data.meta.sentra[s.id];
-      if (!Auth.isStaff() && e && e.owner && e.owner !== Auth.user.username) return;
+      if (!Auth.isStaff() && !Auth.isKoordSentra() && e && e.owner && e.owner !== Auth.user.username) return;
+      if (Auth.isKoordSentra() && asg.indexOf(s.id) < 0) return;
       steps.push({ type: 'sentra', sid: s.id, short: SENTRA_SHORT[s.id] || s.singkat, full: s.nama });
       return;
     }
@@ -90,16 +91,28 @@ function normalizeWizardData(raw) {
   return out;
 }
 function wizPayload() {
-  return { id: WZ.id || null, id_peserta: WZ.id_peserta, creator: WZ.creator || '', tanggal: WZ.tanggal || '', data: WZ.data };
+  const step = WZ.steps && WZ.steps[WZ.step];
+  return { id: WZ.id || null, id_peserta: WZ.id_peserta, creator: WZ.creator || '', tanggal: WZ.tanggal || '', active_sentra: step && step.type === 'sentra' ? step.sid : '', data: WZ.data };
+}
+function wizPriorUnfinalizedSentra(sid) {
+  if (!WZ || !Auth.user || Auth.user.role !== 'ASSESSOR') return null;
+  const current = WZ.data.meta.sentra[sid] || {};
+  if (current.owner && current.status !== 'FINAL') return null;
+  return state.schema.sentra.find(s => {
+    const st = WZ.data.meta.sentra[s.id] || {};
+    return s.id !== sid && st.owner && st.status !== 'FINAL';
+  }) || null;
 }
 function wizLocked(sid) {
   if (!WZ) return true;
   if (Auth.isStaff()) return false;
+  if (Auth.isKoordSentra()) return true;
   const st = WZ.data.meta.sentra[sid] || {};
   if (st.status === 'FINAL') return true;
   if (st.owner && st.owner !== Auth.user.username) return true;
   const asg = (Auth.user && Auth.user.assignments) || [];
   if (asg.length > 0 && asg.indexOf(sid) < 0) return true;
+  if (wizPriorUnfinalizedSentra(sid)) return true;
   return false;
 }
 function sentraMineInWiz(sid) {
@@ -374,15 +387,19 @@ async function wizPilihPeserta(id) {
     const ex = (state.riwayat || []).find(r => r.id_peserta === p.id_peserta);
     if (ex) {
       const buka = await confirmModal({
-        title: 'Assessment sudah ada',
-        html: '<p class="text-sm">' + esc(p.nama) + ' sudah memiliki assessment <b>' + esc(ex.id) + '</b> (' + (ex.status === 'SUBMITTED' ? 'Selesai' : ex.status === 'SIAP_REVIEW' ? 'Siap Review' : 'Draft') + '). Satu peserta hanya boleh satu assessment  buka yang ada?</p>',
-        confirmText: 'Buka'
+        title: 'Lanjutkan penilaian Anda?',
+        html: '<p class="text-sm">Anda sedang memiliki draft penilaian untuk <b>' + esc(p.nama) + '</b>.</p><p class="text-xs text-slate-500 mt-2">Pilih <b>Lanjutkan</b> untuk meneruskan isian yang sebelumnya tersimpan.</p>',
+        confirmText: 'Ya, Lanjutkan',
+        cancelText: 'Nanti'
       });
       if (buka) {
         try { const res = await api('getAssessment', ex.id); wizardStart(res.assessment); } catch (err) { toast(err.message, 'error'); }
         return;
       }
+      return;
     }
+    toast('Penilaian peserta ini sedang diproses dan belum menjadi giliran Anda.', 'info');
+    return;
   }
   WZ.id_peserta = p.id_peserta;
   WZ.nama = p.nama; WZ.nomor = p.nomor_peserta; WZ.asal_tk = p.asal_tk;
@@ -466,6 +483,9 @@ function stepSentraHtml(sid) {
     html += Auth.isStaff()
       ? '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('info', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 leading-relaxed">Sentra ini sudah difinalisasi oleh <b>' + esc(st.assessor) + '</b>. Sebagai Koordinator/Admin Anda tetap dapat mengubah.</p></div>'
       : '<div class="card border-emerald-200 bg-emerald-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-emerald-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-emerald-800 leading-relaxed">✓ Difinalisasi oleh <b>' + esc(st.assessor) + '</b>' + (st.waktu ? ' | ' + esc(st.waktu) : '') + '  terkunci. Hubungi Koordinator untuk membuka.</p></div>';
+  } else if (wizPriorUnfinalizedSentra(sid)) {
+    const prior = wizPriorUnfinalizedSentra(sid);
+    html += '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 leading-relaxed">Finalisasi <b>' + esc(prior.singkat || prior.nama) + '</b> terlebih dahulu sebelum mengisi sentra ini.</p></div>';
   } else if (st.owner) {
     if (Auth.isStaff()) {
       html += '<div class="card border-amber-200 bg-amber-50/70 p-4 anim-in mt-4 flex items-start gap-3.5"><span class="text-amber-500 shrink-0 mt-0.5">' + ic('lock', 'w-5 h-5') + '</span><p class="text-xs font-bold text-amber-800 flex-1 leading-relaxed">Sentra ini diklaim oleh <b>' + esc(st.ownerName || st.owner) + '</b>. Sebagai Koordinator/Admin Anda tetap dapat mengubah.</p></div>';
@@ -597,7 +617,7 @@ function sentraReviewCard(s) {
   if (st.status === 'FINAL') {
     topHtml = '<div class="flex items-center gap-2 flex-wrap">' +
       '<span class="badge bg-emerald-50 text-emerald-600">' + ic('check', 'w-3.5 h-3.5') + ' Difinalisasi oleh ' + esc(st.assessor) + '</span>' +
-      (Auth.isStaff() ? '<button class="btn-soft !px-3 !py-2 !text-xs" onclick="wizRetract(\'' + s.id + '\')">Tarik</button>' : '') +
+      (Auth.canManageSentra(s.id) ? '<button class="btn-soft !px-3 !py-2 !text-xs" onclick="wizRetract(\'' + s.id + '\')">Tarik</button>' : '') +
       '</div>';
   } else {
     const claimTxt = st.owner
@@ -605,7 +625,7 @@ function sentraReviewCard(s) {
       : 'Belum diklaim  mengisi skor otomatis menjadikannya milik Anda';
     topHtml = '<div class="flex items-center gap-2 flex-wrap">' +
       '<span class="badge ' + (st.owner === Auth.user.username ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-500') + '">' + esc(claimTxt) + '</span>' +
-      '<button class="btn-primary !py-2.5 !text-xs ' + (missing.length ? 'opacity-40 pointer-events-none' : '') + '" onclick="wizFinalize(\'' + s.id + '\')">' + ic('check', 'w-4 h-4') + ' Finalisasi ' + esc(SENTRA_SHORT[s.id] || s.singkat || s.nama) + '</button>' +
+      (Auth.canFinalizeSentra(s.id) && !wizPriorUnfinalizedSentra(s.id) ? '<button class="btn-primary !py-2.5 !text-xs ' + (missing.length ? 'opacity-40 pointer-events-none' : '') + '" onclick="wizFinalize(\'' + s.id + '\')">' + ic('check', 'w-4 h-4') + ' Finalisasi ' + esc(SENTRA_SHORT[s.id] || s.singkat || s.nama) + '</button>' : '') +
       (missing.length ? '<span class="text-[11px] font-bold text-amber-600">' + (kurang ? kurang + ' aspek belum dinilai · ' : '') + missing.length + ' isian wajib belum lengkap</span>' : '') +
       '</div>';
   }
@@ -918,9 +938,10 @@ async function wizAutosave(force) {
       terminal = true;
       const mid = msg.split('|')[0].split(':')[1];
       const buka = await confirmModal({
-        title: 'Assessment sudah ada',
-        html: '<p class="text-sm">Peserta ini sudah memiliki assessment <b>' + esc(mid) + '</b>. Buka assessment yang ada?</p>',
-        confirmText: 'Buka'
+        title: 'Penilaian peserta sudah dibuat',
+        html: '<p class="text-sm">Sistem menemukan penilaian yang sudah ada untuk peserta ini.</p><p class="text-xs text-slate-500 mt-2">Pilih <b>Periksa</b> untuk memastikan apakah draft tersebut merupakan giliran Anda.</p>',
+        confirmText: 'Periksa',
+        cancelText: 'Kembali'
       });
       if (buka) {
         try { const r2 = await api('getAssessment', mid); wizardStart(r2.assessment); } catch (err) { toast(err.message, 'error'); }
@@ -974,6 +995,10 @@ function wizSwitcherPesertaHtml(q) {
     const text = [p.nama, p.nomor_peserta, p.asal_tk].join(' ').toLowerCase();
     if (needle && text.indexOf(needle) < 0) return false;
     const existing = assessments.find(a => a.id_peserta === p.id_peserta);
+    /* Pertahanan tambahan untuk data lama/cache: bila siswa sudah memiliki
+     * assessment tetapi draftnya tidak ada di daftar guru ini, berarti bukan
+     * giliran guru ini. Jangan tawarkan sebagai penilaian baru. */
+    if (!existing && Number(p.jumlah_assessment || 0) > 0) return false;
     return !existing || existing.status !== 'SUBMITTED';
   }).slice(0, 40);
   if (!list.length) return '<p class="py-5 text-center text-sm text-slate-400">Siswa yang dapat dinilai tidak ditemukan.</p>';
@@ -1009,7 +1034,7 @@ async function wizOpenSwitcher() {
     state.riwayat = res.riwayat || state.riwayat;
   } catch (e) { /* gunakan daftar lokal bila penyegaran tidak tersedia */ }
 
-  const canOpen = item => item.status !== 'SUBMITTED' && (Auth.isStaff() || (item.myPending || []).length);
+  const canOpen = item => item.status !== 'SUBMITTED' && (Auth.isController() || (item.myPending || []).length);
   const items = (state.riwayat || []).filter(canOpen);
   if (WZ.id && !items.some(item => item.id === WZ.id)) items.unshift({ id: WZ.id, nama: WZ.nama, nomor: WZ.nomor, status: 'DRAFT', updated: '', myPending: [] });
   items.sort((a, b) => (a.id === WZ.id ? -1 : b.id === WZ.id ? 1 : String(b.updated || '').localeCompare(String(a.updated || ''))));
@@ -1026,7 +1051,7 @@ async function wizOpenSwitcher() {
   const ov = modalOpen(
     '<div class="flex items-start justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-5">' +
       '<div class="min-w-0"><h3 class="text-lg font-extrabold text-slate-800">Ganti siswa</h3>' +
-      '<p class="text-xs text-slate-500 mt-1 leading-relaxed">Pilih siswa untuk langsung membuka form penilaiannya. Draft aktif sudah disimpan.</p></div>' +
+      '<p class="text-xs text-slate-500 mt-1 leading-relaxed">Penilaian siswa yang sedang dibuka telah disimpan. Pilih siswa lain untuk melanjutkan penilaian.</p></div>' +
       '<button type="button" data-wiz-switch-close class="w-9 h-9 shrink-0 rounded-xl bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-700 grid place-items-center" aria-label="Tutup">' + ic('x', 'w-4 h-4') + '</button>' +
     '</div>' +
     '<div class="wiz-switcher-body grid gap-5 p-4 pt-5 sm:grid-cols-2 sm:gap-6 sm:px-6 sm:pb-6">' +
@@ -1089,6 +1114,10 @@ function goStep(i) {
   if (i === WZ.step) return;
   const st = steps[i];
   if (st.type !== 'data' && !WZ.id_peserta) { toast('Lengkapi Data Peserta terlebih dahulu.', 'info'); return; }
+  if (st.type === 'sentra') {
+    const prior = wizPriorUnfinalizedSentra(st.sid);
+    if (prior) { toast('Finalisasi ' + (prior.singkat || prior.nama) + ' terlebih dahulu sebelum pindah sentra.', 'info'); return; }
+  }
   if (st.type === 'done' && !WZ.done && !WZ.submitted) { toast('Selesaikan finalisasi terlebih dahulu.', 'info'); return; }
   if (WZ.dirty && !WZ.submitted && WZ.id_peserta && !WZ.saving) wizAutosave(true);
   WZ.step = i;
@@ -1233,7 +1262,7 @@ async function wizSubmitFinal() {
 async function wizExit() {
   if (!WZ) {
     document.body.classList.remove('in-wizard');
-    goView(Auth.isStaff() ? 'dashboard' : 'riwayat');
+    goView(Auth.isController() ? 'dashboard' : 'riwayat');
     return;
   }
   if (WZ.dirty && !WZ.submitted && WZ.id_peserta) {
@@ -1252,6 +1281,6 @@ async function wizExit() {
   clearTimeout(autosaveTimer);
   document.body.classList.remove('in-wizard');
   WZ = null;
-  goView(Auth.isStaff() ? 'dashboard' : 'riwayat');
+  goView(Auth.isController() ? 'dashboard' : 'riwayat');
   refreshData();
 }

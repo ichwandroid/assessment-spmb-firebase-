@@ -51,7 +51,7 @@
     .step-pill.done { @apply bg-teal-50 text-teal-700; }
     .step-pill.active { @apply bg-teal-600 text-white shadow-md shadow-teal-600/30; }
   </style>
-  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/style.css?v=20261019-1">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
 </head>
 <body class="bg-slate-50 font-sans text-slate-800 min-h-screen antialiased">
@@ -127,7 +127,7 @@
           <p class="text-[11px] text-slate-500 truncate"><span class="brand-sekolah">SD Anak Saleh</span> • TP <span class="brand-tp">…</span></p>
         </div>
         <nav class="ml-auto hidden sm:flex items-center gap-1.5">
-          <button class="navlink" data-view="dashboard" data-role="staff" onclick="goView('dashboard')">Dashboard</button>
+          <button class="navlink" data-view="dashboard" data-role="controller" onclick="goView('dashboard')">Dashboard</button>
           <button class="navlink" data-view="riwayat" onclick="goView('riwayat')">Penilaian</button>
           <button class="navlink" data-view="peserta" data-role="staff" onclick="goView('peserta')">Siswa</button>
           <button class="navlink" data-view="pengguna" data-role="admin" onclick="goView('pengguna')">Pengguna</button>
@@ -152,7 +152,7 @@
     <main id="view" class="flex-1 w-full max-w-5xl mx-auto px-4 py-5 pb-28 sm:pb-10 min-h-[70vh]"></main>
 
     <nav id="bottomnav" class="sm:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-slate-200/70 flex" style="padding-bottom:env(safe-area-inset-bottom)">
-      <button data-view="dashboard" data-role="staff" onclick="goView('dashboard')" class="botnav flex-1">
+      <button data-view="dashboard" data-role="controller" onclick="goView('dashboard')" class="botnav flex-1">
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
         <span class="botnav-label">Dashboard</span>
       </button>
@@ -192,12 +192,12 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 
   <!-- App Modular Scripts -->
-  <script src="/js/config.js"></script>
-  <script src="/js/calc.js"></script>
-  <script src="/js/firebase-config.js"></script>
-  <script src="/js/firebase-service.js"></script>
-  <script src="/js/app.js"></script>
-  <script src="/js/wizard.js"></script>
+  <script src="/js/config.js?v=20261019-1"></script>
+  <script src="/js/calc.js?v=20261019-1"></script>
+  <script src="/js/firebase-config.js?v=20261019-1"></script>
+  <script src="/js/firebase-service.js?v=20261019-1"></script>
+  <script src="/js/app.js?v=20261019-1"></script>
+  <script src="/js/wizard.js?v=20261019-1"></script>
 
   <script>
     function startApp() {

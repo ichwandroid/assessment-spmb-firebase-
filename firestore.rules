@@ -22,7 +22,7 @@ service cloud.firestore {
     //   - username: string (required, immutable)
     //   - nama: string (required)
     //   - pinHash: string (required)
-    //   - role: string (required, in ['ADMIN', 'KOORDINATOR', 'ASSESSOR'])
+    //   - role: string (required, in ['ADMIN', 'KOORDINATOR', 'KOORDINATOR_SENTRA', 'ASSESSOR'])
     //   - assignments: list of strings
     //   - aktif: bool (required)
     //   - pinHarusDiganti: bool (required)
@@ -88,7 +88,7 @@ service cloud.firestore {
       allow create, update: if request.resource.data.username is string &&
                                request.resource.data.nama is string &&
                                request.resource.data.pinHash is string &&
-                               request.resource.data.role in ['ADMIN', 'KOORDINATOR', 'ASSESSOR'];
+                               request.resource.data.role in ['ADMIN', 'KOORDINATOR', 'KOORDINATOR_SENTRA', 'ASSESSOR'];
       allow delete: if true;
     }
 
@@ -120,4 +120,3 @@ service cloud.firestore {
     }
   }
 }
-

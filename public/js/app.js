@@ -57,6 +57,7 @@ const SPIN_SVG = '<svg class="animate-spin w-5 h-5" viewBox="0 0 24 24" fill="no
 const ROLE_INFO = {
   ADMIN: ['Admin', 'bg-emerald-100 text-emerald-700'],
   KOORDINATOR: ['Koordinator', 'bg-blue-100 text-blue-700'],
+  KOORDINATOR_SENTRA: ['Koordinator Sentra', 'bg-violet-100 text-violet-700'],
   ASSESSOR: ['Assessor', 'bg-teal-100 text-teal-700']
 };
 
@@ -68,13 +69,21 @@ const Auth = {
   isAdmin() { return !!(this.user && this.user.role === 'ADMIN'); },
   isKoord() { return !!(this.user && this.user.role === 'KOORDINATOR'); },
   isStaff() { return !!(this.user && (this.user.role === 'ADMIN' || this.user.role === 'KOORDINATOR')); },
+  isKoordSentra() { return !!(this.user && this.user.role === 'KOORDINATOR_SENTRA'); },
+  isController() { return this.isStaff() || this.isKoordSentra(); },
+  canManageSentra(sid) {
+    if (this.isStaff()) return true;
+    return this.isKoordSentra() && (this.user.assignments || []).indexOf(sid) >= 0;
+  },
   canEditSentra(sid) {
     if (this.isStaff()) return true;
+    if (this.isKoordSentra()) return false;
     if (!this.user) return false;
     const asg = this.user.assignments || [];
     if (asg.length === 0) return true;
     return asg.indexOf(sid) >= 0;
   },
+  canFinalizeSentra(sid) { return this.canManageSentra(sid) || this.canEditSentra(sid); },
   editableSentras() { return (state.schema ? state.schema.sentra : []).filter(s => this.canEditSentra(s.id)); }
 };
 
@@ -146,13 +155,13 @@ function enterApp() {
   $('#app').classList.remove('hidden');
   applyRoleNav();
   applyBranding();
-  if (Auth.isStaff() && !state.dashboard) {
+  if (Auth.isController() && !state.dashboard) {
     loadDashboardData_().then(d => {
       state.dashboard = d;
       if (state.view === 'dashboard') renderDashboard();
     });
   }
-  goView(Auth.isStaff() ? 'dashboard' : 'riwayat');
+  goView(Auth.isController() ? 'dashboard' : 'riwayat');
 }
 /* Identitas sekolah/tahun pelajaran selalu dari CONFIG sheet  jangan hardcode
  * di HTML, karena operator bisa mengubahnya tanpa deploy ulang. */
@@ -168,8 +177,10 @@ function applyRoleNav() {
   if (!Auth.user) return;
   const admin = Auth.isAdmin();
   const staff = Auth.isStaff();
+  const controller = Auth.isController();
   $$('[data-role="admin"]').forEach(el => el.classList.toggle('hidden', !admin));
   $$('[data-role="staff"]').forEach(el => el.classList.toggle('hidden', !staff));
+  $$('[data-role="controller"]').forEach(el => el.classList.toggle('hidden', !controller));
   /* Label nav disamakan ('Penilaian'); judul di dalam view yang membedakan
    * "Riwayat Assessment" (staff) dan "Penilaian Saya" (assessor). */
   const un = $('#uc-nama'), ur = $('#uc-role');
@@ -188,10 +199,10 @@ async function refreshData() {
     /* Dashboard dihitung on-demand (getDashboardData), bukan ikut bootstrap 
      * sebelumnya getDashboardData tidak pernah dipanggil sehingga kartu
      * "Tugas Menunggu Penilaian" selalu kosong dan komentarnya dinonaktifkan. */
-    state.dashboard = Auth.isStaff() ? await loadDashboardData_() : null;
+    state.dashboard = Auth.isController() ? await loadDashboardData_() : null;
     applyRoleNav();
     if (pinPending()) showPinGate();
-    if (state.view === 'dashboard' && Auth.isStaff()) showDashboard();
+    if (state.view === 'dashboard' && Auth.isController()) showDashboard();
     else if (state.view === 'riwayat') showRiwayat();
   } catch (e) { /* silent */ }
 }
@@ -332,7 +343,7 @@ function animateIn() {
 }
 function goView(name, param) {
   if (!Auth.user) return;
-  if (name === 'dashboard' && !Auth.isStaff()) name = 'riwayat';
+  if (name === 'dashboard' && !Auth.isController()) name = 'riwayat';
   if (name === 'peserta' && !Auth.isStaff()) name = 'riwayat';
   if (name === 'pengguna' && !Auth.isAdmin()) name = 'riwayat';
   if (name === 'soal' && !Auth.isAdmin()) name = 'riwayat';
@@ -429,6 +440,7 @@ function sentraName(sid) { const s = state.schema.sentra.find(x => x.id === sid)
 function sentraMineInView(sid, a) {
   if (!Auth.user) return false;
   if (Auth.isStaff()) return true;
+  if (Auth.canManageSentra(sid)) return true;
   if ((Auth.user.assignments || []).indexOf(sid) < 0) return false;
   const own = a && a.sentraOwner && a.sentraOwner[sid];
   return !own || own.owner === Auth.user.username;
@@ -476,7 +488,7 @@ function errorHtml(msg) {
  * setiap kali dashboard dibuka (enterApp/refreshData/getDashboardDataImpl_
  * tidak lagi ikut bootstrap getInitialData). */
 async function showDashboard() {
-  if (!Auth.isStaff()) { goView('riwayat'); return; }
+  if (!Auth.isController()) { goView('riwayat'); return; }
   if (!state.dashboard) {
     state.dashboard = await loadDashboardData_();
     if (state.view !== 'dashboard') return; /* pengguna sudah pindah view */
@@ -618,9 +630,12 @@ function recentHtml() {
 /* ════════════════ VIEW: RIWAYAT / PENILAIAN ════════════════ */
 function showRiwayat() {
   const staff = Auth.isStaff();
+  const sentraCoordinator = Auth.isKoordSentra();
+  const heading = staff ? 'Riwayat Assessment' : (sentraCoordinator ? 'Pemantauan Sentra' : 'Penilaian Saya');
+  const description = staff ? 'Kelola semua assessment peserta' : (sentraCoordinator ? 'Pantau dan kendalikan assessment pada sentra yang ditugaskan' : 'Buka peserta untuk menilai BAB yang ditugaskan kepada Anda');
   setView(
-    '<div class="anim-in"><h2 class="text-xl font-extrabold text-slate-800">' + (staff ? 'Riwayat Assessment' : 'Penilaian Saya') + '</h2>' +
-    '<p class="text-sm text-slate-500 mt-0.5">' + (staff ? 'Kelola semua assessment peserta' : 'Buka peserta untuk menilai BAB yang ditugaskan kepada Anda') + '</p></div>' +
+    '<div class="anim-in"><h2 class="text-xl font-extrabold text-slate-800">' + heading + '</h2>' +
+    '<p class="text-sm text-slate-500 mt-0.5">' + description + '</p></div>' +
     '<div class="card p-4 mt-4 anim-in">' +
     '<div class="relative">' + ic('search', 'w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400') +
     '<input id="rq" class="input pad-icon" placeholder="Cari nama / nomor / pembuat..." value="' + esc(state.rQuery) + '"></div>' +
@@ -699,7 +714,7 @@ function renderUsers() {
   setView(
     '<div class="anim-in flex items-center justify-between gap-3 flex-wrap">' +
     '<div><h2 class="text-xl font-extrabold text-slate-800">Pengguna & Penugasan</h2>' +
-    '<p class="text-sm text-slate-500 mt-0.5">Assessor menilai sesuai penugasan; Koordinator submit final & menandatangani laporan</p></div>' +
+    '<p class="text-sm text-slate-500 mt-0.5">Assessor menilai; Koordinator Sentra mengawasi sentra tugasnya; Koordinator submit final.</p></div>' +
     '<div class="flex items-center gap-2 flex-wrap">' +
     '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="downloadTemplateAssessor()">' + ic('download', 'w-4 h-4') + ' Template CSV</button>' +
     '<button class="btn-soft !py-2 !px-3 !text-xs" onclick="uploadAssessorModal()">' + ic('upload', 'w-4 h-4') + ' Upload CSV</button>' +
@@ -815,10 +830,11 @@ function userModal(u) {
     '<div><label class="label">PIN (4-12 digit)</label><input id="uf-pin" class="input" inputmode="numeric" placeholder="' + (edit ? 'Kosongkan jika tidak diganti' : 'PIN baru') + '"></div>' +
     '<div><label class="label">Peran</label><select id="uf-role" class="input">' +
     '<option value="ASSESSOR" ' + (edit && u.role === 'ASSESSOR' ? 'selected' : '') + '>Assessor  menilai sesuai penugasan</option>' +
+    '<option value="KOORDINATOR_SENTRA" ' + (edit && u.role === 'KOORDINATOR_SENTRA' ? 'selected' : '') + '>Koordinator Sentra  kontrol & finalisasi sentra tugas</option>' +
     '<option value="KOORDINATOR" ' + (edit && u.role === 'KOORDINATOR' ? 'selected' : '') + '>Koordinator  review, submit final & ttd laporan</option>' +
     '<option value="ADMIN" ' + (edit && u.role === 'ADMIN' ? 'selected' : '') + '>Admin  akses penuh + kelola pengguna</option></select></div>' +
     '<div><label class="label">Penugasan Sentra (BAB)</label>' +
-    '<p class="text-[11px] text-slate-400 mb-2">Wajib untuk Assessor; opsional untuk Koordinator/Admin.</p>' +
+    '<p class="text-[11px] text-slate-400 mb-2">Wajib untuk Assessor dan Koordinator Sentra; opsional untuk Koordinator/Admin.</p>' +
     '<div class="grid gap-2">' + cbs + '</div></div>' +
     (edit ? '<label class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 cursor-pointer"><input id="uf-aktif" type="checkbox" class="w-5 h-5 accent-teal-600" ' + (u.aktif ? 'checked' : '') + '><span class="text-sm font-bold text-slate-700">Akun aktif</span></label>' : '') +
     '</div>' +
@@ -838,7 +854,7 @@ function userModal(u) {
     if (!payload.nama) { toast('Nama wajib diisi.', 'error'); return; }
     if (payload.pin && !/^\d{4,12}$/.test(payload.pin)) { toast('PIN harus 4-12 digit angka.', 'error'); return; }
     if (!edit && !/^\d{4,12}$/.test(payload.pin)) { toast('PIN wajib 4-12 digit angka.', 'error'); return; }
-    if (payload.role === 'ASSESSOR' && !payload.assignments.length) { toast('Assessor minimal ditugaskan 1 sentra.', 'error'); return; }
+    if ((payload.role === 'ASSESSOR' || payload.role === 'KOORDINATOR_SENTRA') && !payload.assignments.length) { toast('Peran ini minimal ditugaskan 1 sentra.', 'error'); return; }
     if (guardPin()) return;
     const btn = ov.querySelector('#uf-save');
     setBtnLoading(btn, true, 'Menyimpan...');
@@ -979,7 +995,7 @@ function uploadAssessorModal() {
     '<p class="font-bold text-slate-700 mb-1">Ketentuan Format CSV:</p>' +
     '<ul class="list-disc pl-4 space-y-0.5">' +
     '<li>Header wajib: <b>username, nama, role, pin, assignments</b></li>' +
-    '<li>Peran (role): <code>ASSESSOR</code>, <code>KOORDINATOR</code>, atau <code>ADMIN</code></li>' +
+    '<li>Peran (role): <code>ASSESSOR</code>, <code>KOORDINATOR_SENTRA</code>, <code>KOORDINATOR</code>, atau <code>ADMIN</code></li>' +
     '<li>PIN default jika kosong: <code>1234</code></li>' +
     '<li>Kode sentra penugasan: <code>' + esc(sentraListStr) + '</code> (pisahkan dengan tanda koma atau titik koma)</li>' +
     '</ul>' +
@@ -1038,7 +1054,7 @@ function handleAssessorFileSelect(file, ov) {
         const username = String(r.username || '').trim().toLowerCase();
         const nama = String(r.nama || '').trim();
         let role = String(r.role || 'ASSESSOR').trim().toUpperCase();
-        if (!['ADMIN', 'KOORDINATOR', 'ASSESSOR'].includes(role)) role = 'ASSESSOR';
+        if (!['ADMIN', 'KOORDINATOR', 'KOORDINATOR_SENTRA', 'ASSESSOR'].includes(role)) role = 'ASSESSOR';
         const pin = String(r.pin || '1234').trim();
         const assignments = r.assignments || '';
         if (username && nama) {
@@ -1486,8 +1502,8 @@ async function showHasil(id) {
       '<span class="badge ' + (st.status === 'FINAL' ? 'bg-emerald-50 text-emerald-600' : (ownTxt ? 'bg-amber-50 text-amber-700' : 'bg-slate-100 text-slate-400')) + '">' +
       (st.status === 'FINAL' ? '✓ ' + esc(st.assessor) : (ownTxt ? ic('lock', 'w-3 h-3') + ' ' + esc(ownTxt) : 'Belum diklaim')) + '</span>' +
       '<span class="badge ' + (h.sentra[s.id] != null ? 'bg-teal-50 text-teal-700' : 'bg-slate-100 text-slate-400') + '">Rerata: ' + (h.sentra[s.id] != null ? h.sentra[s.id] : '–') + '</span>' +
-      (staff && a.status !== 'SUBMITTED' && st.status === 'FINAL' ? '<button class="btn-soft !px-3 !py-1.5 !text-xs" data-act="retract" data-id="' + esc(a.id) + '" data-sid="' + s.id + '">Tarik</button>' : '') +
-      (staff && a.status !== 'SUBMITTED' && st.owner ? '<button class="btn-soft !px-3 !py-1.5 !text-xs" data-act="release" data-id="' + esc(a.id) + '" data-sid="' + s.id + '" title="Bebaskan agar assessor lain bisa mengambil alih">Lepaskan</button>' : '') +
+      (Auth.canManageSentra(s.id) && a.status !== 'SUBMITTED' && st.status === 'FINAL' ? '<button class="btn-soft !px-3 !py-1.5 !text-xs" data-act="retract" data-id="' + esc(a.id) + '" data-sid="' + s.id + '">Tarik</button>' : '') +
+      (Auth.canManageSentra(s.id) && a.status !== 'SUBMITTED' && st.status !== 'FINAL' && st.owner ? '<button class="btn-soft !px-3 !py-1.5 !text-xs" data-act="release" data-id="' + esc(a.id) + '" data-sid="' + s.id + '" data-owner="' + esc(st.owner) + '" title="Pindahkan tugas ke assessor lain pada sentra ini">Pindahkan</button>' : '') +
       '</div></div>' +
       (staff && st.owner ? '<p class="text-[11px] text-slate-500 mt-1">Dikerjakan oleh: <b>' + esc(st.ownerName || st.owner) + '</b> (@' + esc(st.owner) + ')</p>' : '') +
       '<div class="mt-4 grid gap-4">' + s.materi.map(m => detailMateri(m, a.data[m.id] || {}, h.materi[m.id])).join('') + '</div></div>';
@@ -1740,7 +1756,7 @@ document.addEventListener('click', async e => {
       if (state.view === 'hasil') showHasil(id); else goView('hasil', id);
     } catch (err) { toast(err.message, 'error'); }
   } else if (act === 'retract') {
-    if (!Auth.isStaff()) { toast('Khusus Koordinator/Admin.', 'error'); return; }
+    if (!Auth.canManageSentra(el.dataset.sid)) { toast('Khusus koordinator sentra yang ditugaskan.', 'error'); return; }
     if (guardPin()) return;
     const ok = await confirmModal({ title: 'Tarik Finalisasi?', html: '<p class="text-sm">Sentra ' + esc(sentraName(el.dataset.sid)) + ' akan dibuka kembali untuk diedit.</p>', confirmText: 'Ya, Tarik', danger: true });
     if (!ok) return;
@@ -1751,20 +1767,33 @@ document.addEventListener('click', async e => {
       if (state.view === 'hasil') showHasil(id);
     } catch (err) { toast(err.message, 'error'); }
   } else if (act === 'release') {
-    if (!Auth.isStaff()) { toast('Khusus Koordinator/Admin.', 'error'); return; }
+    if (!Auth.canManageSentra(el.dataset.sid)) { toast('Khusus koordinator sentra yang ditugaskan.', 'error'); return; }
     if (guardPin()) return;
-    const ok = await confirmModal({
-      title: 'Lepaskan klaim sentra?',
-      html: '<p class="text-sm">Sentra <b>' + esc(sentraName(el.dataset.sid)) + '</b> dibuka  assessor lain (BAB sama) dapat mengambil alih. Skor yang sudah masuk <b>tetap tersimpan</b>.</p>',
-      confirmText: 'Ya, Lepaskan', danger: true
-    });
-    if (!ok) return;
+    let users;
     try {
-      await api('releaseSentra', id, el.dataset.sid);
-      toast('Klaim dilepaskan.', 'success');
-      refreshData();
-      if (state.view === 'hasil') showHasil(id);
-    } catch (err) { toast(err.message, 'error'); }
+      users = (await api('getUsersLite')).users || [];
+    } catch (err) { toast(err.message, 'error'); return; }
+    const targets = users.filter(u => u.role === 'ASSESSOR' && (u.assignments || []).indexOf(el.dataset.sid) >= 0 && u.username !== el.dataset.owner);
+    if (!targets.length) { toast('Belum ada assessor aktif lain yang ditugaskan pada sentra ini.', 'error'); return; }
+    const ov = modalOpen(
+      '<h3 class="text-lg font-extrabold text-slate-800">Pindahkan Tugas Sentra</h3>' +
+      '<p class="text-sm text-slate-500 mt-1">Pilih assessor tujuan untuk <b>' + esc(sentraName(el.dataset.sid)) + '</b>. Nilai yang sudah ada tetap tersimpan dan sentra akan dibuka sebagai draft.</p>' +
+      '<div class="mt-4"><label class="label">Assessor tujuan</label><select id="transfer-target" class="input">' +
+      targets.map(u => '<option value="' + esc(u.username) + '">' + esc(u.nama) + ' (@' + esc(u.username) + ')</option>').join('') +
+      '</select></div><div class="mt-5 grid grid-cols-2 gap-3"><button id="transfer-cancel" class="btn-soft">Batal</button><button id="transfer-save" class="btn-primary">Pindahkan</button></div>'
+    );
+    ov.querySelector('#transfer-cancel').onclick = () => modalClose();
+    ov.querySelector('#transfer-save').onclick = async () => {
+      const btn = ov.querySelector('#transfer-save');
+      setBtnLoading(btn, true, 'Memindahkan...');
+      try {
+        await api('releaseSentra', id, el.dataset.sid, ov.querySelector('#transfer-target').value);
+        modalClose();
+        toast('Tugas sentra berhasil dipindahkan.', 'success');
+        refreshData();
+        if (state.view === 'hasil') showHasil(id);
+      } catch (err) { setBtnLoading(btn, false); toast(err.message, 'error'); }
+    };
   } else if (act === 'user-edit') {
     const u = state.users.find(x => x.username === el.dataset.username);
     if (u) userModal(u);

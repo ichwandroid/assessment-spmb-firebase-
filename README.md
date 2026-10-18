@@ -102,16 +102,22 @@ assessment-spmb/
 
 ## Peran & Hak Akses
 
-| Kemampuan | ASSESSOR | KOORDINATOR | ADMIN |
-|---|:--:|:--:|:--:|
-| Menilai sentra yang ditugaskan | ✅ | ✅ (semua) | ✅ (semua) |
-| Melihat assessment | hanya miliknya / sentra tugasnya | semua | semua |
-| Finalisasi sentra | ✅ | ✅ | ✅ |
-| Tarik finalisasi / Lepas klaim | — | ✅ | ✅ |
-| Submit Final (tanda tangan) | — | ✅ | ✅ |
-| Buka kunci assessment | — | ✅ | ✅ |
-| Tambah/ubah data peserta | — | ✅ | ✅ |
-| Kelola pengguna & soal | — | — | ✅ |
+| Kemampuan | ASSESSOR | KOORDINATOR SENTRA | KOORDINATOR | ADMIN |
+|---|:--:|:--:|:--:|:--:|
+| Menilai sentra yang ditugaskan | ✅ | — | ✅ (semua) | ✅ (semua) |
+| Melihat aktivitas sentra tugas | hanya miliknya / sentra tugasnya | ✅ | ✅ | ✅ |
+| Finalisasi sentra | ✅ | ✅ (sentra tugas) | ✅ | ✅ |
+| Tarik finalisasi / pindah tugas | — | ✅ (sentra tugas) | ✅ | ✅ |
+| Submit Final / buka kunci | — | — | ✅ | ✅ |
+| Tambah/ubah data peserta | — | — | ✅ | ✅ |
+| Kelola pengguna & soal | — | — | — | ✅ |
+
+Penilaian dapat dimulai dari sentra mana pun. Setelah satu sentra mulai
+dikerjakan, sentra tersebut harus berstatus **FINAL** sebelum tim berpindah ke
+sentra lain, termasuk bila sentra berikutnya ditangani oleh guru yang berbeda.
+Assessment yang seluruh sentranya telah **FINAL** hanya dapat diakses oleh
+Koordinator dan Admin. Pemindahan tugas hanya dapat dilakukan saat sentra
+masih berstatus **DRAFT**.
 
 ---
 
