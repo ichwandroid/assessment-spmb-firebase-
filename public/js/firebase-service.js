@@ -530,9 +530,14 @@ const FirebaseService = {
       return st.owner && st.status !== 'FINAL';
     });
     const hasFinalSentra = FORM_SCHEMA.sentra.some(s => (sentras[s.id] || {}).status === 'FINAL');
-    // Draft lama tanpa pemilik tidak boleh menjadi draft bebas yang dapat
-    // dibuka assessor mana pun. Koordinator yang menetapkan/memindahkannya.
-    if (!activeSentra && !hasFinalSentra && assessment.status === 'DRAFT') return false;
+    // Draft lama tanpa pemilik sentra tidak boleh menjadi draft bebas yang
+    // dapat dibuka assessor mana pun. Namun pembuat draft tetap harus dapat
+    // menemukannya lagi setelah refresh. Ini juga menjadi jalur pemulihan
+    // aman bagi draft yang dibuat sebelum penanda owner diberlakukan.
+    if (!activeSentra && !hasFinalSentra && assessment.status === 'DRAFT') {
+      const creatorUsername = String(assessment.usernameAssessor || '').trim().toLowerCase();
+      return !!creatorUsername && creatorUsername === String(user.username || '').trim().toLowerCase();
+    }
     // Saat satu sentra masih aktif, assessment hanya tampak bagi guru yang
     // sedang memegangnya. Guru sentra lain baru dapat melihatnya setelah
     // sentra aktif tersebut difinalisasi.
