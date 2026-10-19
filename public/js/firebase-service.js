@@ -295,9 +295,12 @@ const FirebaseService = {
 
     const asmMap = {};
     const countMap = {};
-    riwayat.forEach(r => {
-      asmMap[r.id_peserta] = r.id;
-      countMap[r.id_peserta] = (countMap[r.id_peserta] || 0) + 1;
+    assessmentSnap.forEach(doc => {
+      const a = doc.data();
+      const pesertaId = a.idPeserta || a.id_peserta;
+      if (!pesertaId) return;
+      asmMap[pesertaId] = doc.id;
+      countMap[pesertaId] = (countMap[pesertaId] || 0) + 1;
     });
 
     const blockedPeserta = new Set();
@@ -517,10 +520,14 @@ const FirebaseService = {
     if (this.isGlobalCoordinator(user)) return true;
     const meta = assessment.meta || {};
     const sentras = meta.sentra || {};
+    const ownsFinalizedSentra = user.role === 'ASSESSOR' && FORM_SCHEMA.sentra.some(s => {
+      const st = sentras[s.id] || {};
+      return st.status === 'FINAL' && String(st.owner || '').toLowerCase() === String(user.username || '').toLowerCase();
+    });
     const allSentraFinal = FORM_SCHEMA.sentra.every(s => (sentras[s.id] || {}).status === 'FINAL');
-    // Assessment yang semua sentranya sudah final (SIAP_REVIEW maupun
-    // SUBMITTED) menjadi ranah Koordinator/Admin saja.
-    if (allSentraFinal) return false;
+    // Setelah semua sentra final, assessor hanya dapat membaca assessment
+    // yang memuat sentra yang ia finalisasi sendiri.
+    if (allSentraFinal) return ownsFinalizedSentra;
     if (user.role === 'KOORDINATOR_SENTRA') {
       return (user.assignments || []).some(sid => FORM_SCHEMA.sentra.some(s => s.id === sid));
     }
@@ -543,8 +550,9 @@ const FirebaseService = {
     // sentra aktif tersebut difinalisasi.
     if (activeSentra) {
       const active = sentras[activeSentra.id] || {};
-      if (active.owner.toLowerCase() !== user.username.toLowerCase()) return false;
+      if (active.owner.toLowerCase() !== user.username.toLowerCase() && !ownsFinalizedSentra) return false;
     }
+    if (ownsFinalizedSentra) return true;
     // Setelah sentra aktif final, assessor pada sentra yang belum diklaim
     // dapat melihat assessment untuk mengambil giliran berikutnya.
     return FORM_SCHEMA.sentra.some(s => {
@@ -563,9 +571,13 @@ const FirebaseService = {
 
     snap.forEach(doc => {
       const d = doc.data();
-      if (!this.canAccessAssessment(user, d)) return;
-
       const meta = d.meta || defaultMeta_();
+      const ownsFinalizedSentra = user.role === 'ASSESSOR' && FORM_SCHEMA.sentra.some(s => {
+        const st = (meta.sentra || {})[s.id] || {};
+        return st.status === 'FINAL' && String(st.owner || '').toLowerCase() === String(user.username || '').toLowerCase();
+      });
+      if (!this.canAccessAssessment(user, d) && !ownsFinalizedSentra) return;
+
       const sentras = meta.sentra || {};
 
       // Build sentraStatus: { [sid]: 'DRAFT'|'FINAL' }
@@ -574,6 +586,7 @@ const FirebaseService = {
       const sentraOwner = {};
       // myPending: sentras that this user is assigned to and not yet FINAL
       const myPending = [];
+      const myFinalized = [];
       // handledByOther: sentras claimed by another user (not me, not empty)
       const handledByOther = [];
       // Hanya satu sentra yang boleh aktif pada satu assessment. Ini juga
@@ -594,6 +607,10 @@ const FirebaseService = {
         const st = sentras[s.id] || {};
         sentraStatus[s.id] = st.status || 'DRAFT';
         sentraOwner[s.id] = { owner: st.owner || '', ownerName: st.ownerName || '' };
+
+        if (user.role === 'ASSESSOR' && st.status === 'FINAL' && String(st.owner || '').toLowerCase() === String(user.username || '').toLowerCase()) {
+          myFinalized.push(s.id);
+        }
 
         if (!isStaff && !isSentraCoordinator) {
           const isAssigned = asg.length === 0 || asg.includes(s.id);
@@ -637,12 +654,59 @@ const FirebaseService = {
         sentraStatus,
         sentraOwner,
         myPending: (isStaff || isSentraCoordinator) ? [] : myPending,
+        myFinalized: (isStaff || isSentraCoordinator) ? [] : myFinalized,
         handledByOther: (isStaff || isSentraCoordinator) ? [] : handledByOther
       });
     });
 
+    // Giliran sentra yang belum diklaim tetap dapat dipilih dari daftar siswa,
+    // tetapi bukan draft aktif guru. Draft baru tampil setelah owner tercatat.
     list.sort((a, b) => String(b.waktu_diubah || '').localeCompare(String(a.waktu_diubah || '')));
+    if (user.role === 'ASSESSOR') {
+      return list.filter(item => (item.myFinalized || []).length || FORM_SCHEMA.sentra.some(s => {
+        const state = (item.meta && item.meta.sentra && item.meta.sentra[s.id]) || {};
+        return state.owner && state.owner.toLowerCase() === String(user.username || '').toLowerCase() && state.status !== 'FINAL';
+      }));
+    }
+
     return list;
+  },
+
+  async claimNextSentra(id) {
+    const user = this.getCurrentUser();
+    if (!user) throw new Error('SESSION_EXPIRED');
+    if (user.role !== 'ASSESSOR') throw new Error('Klaim sentra hanya tersedia untuk assessor.');
+    if (user.pinHarusDiganti) throw new Error('PIN_DEFAULT: Ganti PIN Anda terlebih dahulu.');
+    const assigned = user.assignments || [];
+    const ref = db.collection('assessments').doc(id);
+    return await db.runTransaction(async transaction => {
+      const snap = await transaction.get(ref);
+      if (!snap.exists) throw new Error('Assessment tidak ditemukan.');
+      const asm = snap.data();
+      if (!this.canAccessAssessment(user, asm)) throw new Error('Akses ditolak — assessment ini bukan giliran Anda.');
+      if (asm.status === 'SUBMITTED') throw new Error('Assessment sudah SUBMITTED.');
+      const meta = sanitizeMeta_(asm.meta);
+      const active = FORM_SCHEMA.sentra.find(s => {
+        const st = meta.sentra[s.id] || {};
+        return st.owner && st.status !== 'FINAL';
+      });
+      if (active && active.owner.toLowerCase() !== user.username.toLowerCase()) {
+        throw new Error('Assessment sedang dikerjakan guru lain.');
+      }
+      const target = FORM_SCHEMA.sentra.find(s => {
+        const st = meta.sentra[s.id] || {};
+        return (assigned.length === 0 || assigned.includes(s.id)) && st.status !== 'FINAL' && (!st.owner || st.owner.toLowerCase() === user.username.toLowerCase());
+      });
+      if (!target) throw new Error('Tidak ada sentra yang dapat Anda klaim pada assessment ini.');
+      const blockedBy = this.priorUnfinalizedSentra(user, target.id, meta);
+      if (blockedBy) throw new Error(`FINALIZE_FIRST:Finalisasi ${blockedBy.singkat || blockedBy.nama} terlebih dahulu.`);
+      const st = meta.sentra[target.id];
+      if (st.owner && st.owner.toLowerCase() !== user.username.toLowerCase()) throw new Error('Sentra sudah diklaim guru lain.');
+      st.owner = user.username;
+      st.ownerName = user.nama;
+      transaction.update(ref, { meta, 'data.meta': meta, waktuDiubah: this.nowStr() });
+      return { ok: true, sentraId: target.id };
+    });
   },
 
   async getAssessment(id) {

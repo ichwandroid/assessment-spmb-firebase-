@@ -669,6 +669,17 @@ function renderRiwayatList() {
   if (q) items = items.filter(r => (r.nama + ' ' + (r.nomor || '') + ' ' + r.creator).toLowerCase().indexOf(q) >= 0);
   if (Auth.isAdmin() && state.rUser !== 'ALL') items = items.filter(r => r.creatorUsername === state.rUser || Object.keys(r.sentraOwner || {}).some(sid => r.sentraOwner[sid] && r.sentraOwner[sid].owner === state.rUser));
   if (state.rFilter !== 'ALL') items = items.filter(r => r.status === state.rFilter);
+  if (Auth.user && Auth.user.role === 'ASSESSOR') {
+    const active = items.filter(r => (r.myPending || []).length);
+    const finalized = items.filter(r => (r.myFinalized || []).length && !(r.myPending || []).length);
+    const group = (title, rows, emptyText) => '<section><h3 class="text-sm font-extrabold uppercase tracking-wide text-slate-500 mb-2">' + title + '</h3>' +
+      (rows.length ? '<div class="grid gap-3">' + rows.map(riwayatCard).join('') + '</div>' : '<div class="card p-5 text-center text-sm text-slate-400">' + emptyText + '</div>') + '</section>';
+    box.innerHTML = '<div class="grid gap-6">' +
+      group('Draft berjalan', active, 'Belum ada draft yang menunggu Anda.') +
+      group('Sudah difinalisasi oleh Anda', finalized, 'Riwayat finalisasi akan muncul di sini.') +
+      '</div>';
+    animateIn(); return;
+  }
   if (!items.length) {
     box.innerHTML = '<div class="card p-10 text-center text-slate-400 anim-in">' + ic('search', 'w-8 h-8 mx-auto opacity-40') + '<p class="mt-3 text-sm font-bold">Tidak ada data ditemukan</p></div>';
     animateIn(); return;
@@ -679,15 +690,26 @@ function renderRiwayatList() {
 function riwayatCard(it) {
   const staff = Auth.isStaff();
   const mine = it.myPending || [];
+  const finalizedMine = it.myFinalized || [];
   const mineTxt = mine.map(sid => sentraName(sid)).join(', ');
+  const finalizedTimes = finalizedMine.map(sid => it.meta && it.meta.sentra && it.meta.sentra[sid] && it.meta.sentra[sid].waktu).filter(Boolean).sort();
+  const otherSentraSummary = finalizedMine.length && !staff ? state.schema.sentra.filter(s => !finalizedMine.includes(s.id)).map(s => {
+    const st = (it.meta && it.meta.sentra && it.meta.sentra[s.id]) || {};
+    const who = st.assessor || st.ownerName || st.owner;
+    const status = st.status === 'FINAL' ? 'difinalisasi oleh ' + (who || 'guru lain') : (who ? 'sedang dinilai oleh ' + who : 'belum dipilih');
+    return '<span class="badge bg-slate-100 text-slate-600">' + esc(s.singkat || s.nama) + ': ' + esc(status) + '</span>';
+  }).join(' ') : '';
   const canOpen = it.status !== 'SUBMITTED' && (staff || mine.length);
   return '<div class="card p-4 anim-in flex flex-col sm:flex-row sm:items-center gap-3">' +
     '<div class="flex-1 min-w-0">' +
     '<div class="flex items-center gap-2 flex-wrap">' +
-    '<p class="font-extrabold text-slate-800">' + esc(it.nama) + '</p>' + statusBadge(it.status) + (it.kode ? kodeBadge(it.kode) : '') + sentraChips(it.sentraStatus) + '</div>' +
+    '<p class="font-extrabold text-slate-800">' + esc(it.nama) + '</p>' + (finalizedMine.length && !mine.length ? '<span class="badge bg-emerald-50 text-emerald-700">Riwayat</span>' : statusBadge(it.status)) + (it.kode ? kodeBadge(it.kode) : '') + sentraChips(it.sentraStatus) + '</div>' +
     '<p class="text-xs text-slate-500 mt-0.5">No. ' + esc(it.nomor || '-') + ' | ' + esc(it.creator) + ' | ' + fmtTanggal(it.tanggal) +
     (it.status !== 'SUBMITTED' ? ' | diubah ' + esc(it.updated || '') : (it.nilai_akhir != null ? ' | Nilai akhir ' + it.nilai_akhir : '')) + '</p>' +
     (mine.length && !staff ? '<p class="mt-1"><span class="badge bg-amber-100 text-amber-700">' + ic('alert', 'w-3 h-3') + ' Menunggu Anda: ' + esc(mineTxt) + '</span></p>' : '') +
+    (finalizedMine.length && !staff ? '<p class="mt-1"><span class="badge bg-emerald-50 text-emerald-700">' + ic('check', 'w-3 h-3') + ' Anda finalisasi: ' + esc(finalizedMine.map(sid => sentraName(sid)).join(', ')) + '</span></p>' : '') +
+    (finalizedTimes.length && !staff ? '<p class="text-[11px] text-slate-400 mt-1">Finalisasi terakhir: ' + esc(finalizedTimes[finalizedTimes.length - 1]) + '</p>' : '') +
+    (otherSentraSummary ? '<div class="mt-2"><p class="text-[11px] font-bold text-slate-500 mb-1">Sentra lain pada assessment ini</p><div class="flex flex-wrap gap-1.5">' + otherSentraSummary + '</div></div>' : '') +
     ((it.handledByOther || []).length && !staff ? '<p class="mt-1"><span class="badge bg-slate-200 text-slate-600">' + ic('lock', 'w-3 h-3') + ' ' + esc(it.handledByOther.map(x => sentraName(x.sid) + ': ' + x.ownerName).join(', ')) + '</span></p>' : '') +
     '</div>' +
     '<div class="flex gap-2 flex-wrap">' +

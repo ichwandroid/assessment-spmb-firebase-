@@ -132,23 +132,24 @@ function wizardStart(existing) {
     showHasilById(existing.id);
     return;
   }
+  const userNama = (Auth.user && Auth.user.nama) || 'Assessor';
   if (existing) {
     WZ = {
       id: existing.id || null,
       id_peserta: existing.id_peserta || null,
       nama: existing.nama || '', nomor: existing.nomor || '', asal_tk: existing.asal_tk || '',
-      creator: existing.creator || Auth.user.nama,
+      creator: existing.creator || userNama,
       tanggal: existing.tanggal || todayStr(),
       data: normalizeWizardData(existing.data),
       step: 0, dirty: false, submitted: false, saving: false, done: false,
       mode: 'lama', pesertaBaru: null, jumpTarget: null, ui: { open: {} }, hasilFinal: null,
-      isCreator: existing.creator === Auth.user.nama || Auth.isStaff(),
+      isCreator: existing.creator === userNama || Auth.isStaff(),
       autoFails: 0, autoDelay: 1500
     };
   } else {
     WZ = {
       id: null, id_peserta: null, nama: '', nomor: '', asal_tk: '',
-      creator: Auth.user.nama, tanggal: todayStr(),
+      creator: userNama, tanggal: todayStr(),
       data: emptyWizardData(),
       step: 0, dirty: false, submitted: false, saving: false, done: false,
       mode: 'lama', pesertaBaru: { nama: '', nomor: '', asal_tk: '' },
@@ -398,6 +399,16 @@ async function wizPilihPeserta(id) {
       }
       return;
     }
+    if (p.id_assessment && Auth.user.role === 'ASSESSOR') {
+      try {
+        const claim = await api('claimNextSentra', p.id_assessment);
+        const res = await api('getAssessment', p.id_assessment);
+        wizardStart(res.assessment);
+        const label = SENTRA_SHORT[claim.sentraId] || sentraName(claim.sentraId);
+        toast('Siswa dipilih. Giliran ' + label + ' berhasil diklaim.', 'success', 3000);
+      } catch (err) { toast(err.message, 'error', 5000); }
+      return;
+    }
     toast('Penilaian peserta ini sedang diproses dan belum menjadi giliran Anda.', 'info');
     return;
   }
@@ -494,7 +505,19 @@ function stepSentraHtml(sid) {
     }
   }
 
-  s.materi.forEach((m, mi) => { html += materiCardHtml(m, mi, sid); });
+  const completedMateri = s.materi.filter(m => calcMateri(m, WZ.data[m.id]).lengkap).length;
+  html += '<div class="flex items-center justify-between gap-2 mt-5 mb-2 px-1">' +
+    '<p class="text-xs font-extrabold uppercase tracking-wider text-slate-500">' +
+    'Materi Observasi <span class="text-teal-600 font-bold ml-1">(' + completedMateri + '/' + s.materi.length + ' Selesai)</span>' +
+    '</p>' +
+    '<div class="flex items-center gap-1.5">' +
+    '<button type="button" class="btn-soft !py-1 !px-2.5 !text-[11px] font-bold text-slate-600 hover:text-slate-800" onclick="wizCollapseAllMateri()">' +
+    'Minimalkan Semua</button>' +
+    '<button type="button" class="btn-soft !py-1 !px-2.5 !text-[11px] font-bold text-teal-700 bg-teal-50 hover:bg-teal-100" onclick="wizExpandAllMateri()">' +
+    'Buka Semua</button>' +
+    '</div></div>';
+
+  s.materi.forEach((m, mi) => { html += materiCardHtml(m, mi, sid, s.materi); });
   html += sentraCatatanHtml(s, sid);
   return html;
 }
@@ -563,18 +586,58 @@ function materiItemsHtml(m, d, r) {
   }).join('');
 }
 
-function materiCardHtml(m, mi, sid) {
+function materiCardHtml(m, mi, sid, allMateri) {
   const d = WZ.data[m.id];
   const r = calcMateri(m, d);
-  const isOpen = (WZ.ui.open[m.id] !== undefined) ? WZ.ui.open[m.id] : (mi === 0);
+  const locked = wizLocked(sid);
+
+  // Tab form assessment terminimise saat tidak dinilai:
+  // - Jika sentra terkunci -> semua tertutup (false)
+  // - Jika pengguna sudah eksplisit membuka/menutup -> pakai WZ.ui.open[m.id]
+  // - Default: hanya materi yang sedang dinilai (materi pertama yang belum lengkap) yang terbuka!
+  let isOpen = false;
+  if (!locked) {
+    if (WZ.ui.open && WZ.ui.open[m.id] !== undefined) {
+      isOpen = !!WZ.ui.open[m.id];
+    } else {
+      const list = allMateri || (state.schema.sentra.find(x => x.id === sid) || {}).materi || [];
+      const firstIncomplete = list.find(mat => !calcMateri(mat, WZ.data[mat.id]).lengkap);
+      if (firstIncomplete) {
+        isOpen = (firstIncomplete.id === m.id);
+      } else {
+        isOpen = false;
+      }
+    }
+  }
+
   const width = r.maks ? Math.round(r.skor / r.maks * 100) : 0;
-  return '<div class="materi-card card ' + (mi === 0 ? 'mt-4 ' : '') + 'mb-4 anim-in ' + (isOpen ? 'open ' : '') + (wizLocked(sid) ? 'locked' : '') + '" id="mc-' + m.id + '" style="scroll-margin-top:140px">' +
-    '<button type="button" class="w-full flex items-center gap-3.5 px-4 py-4 sm:px-5 text-left" onclick="wizToggle(\'' + m.id + '\')">' +
+
+  let badgeHtml = '';
+  if (r.lengkap) {
+    badgeHtml = '<span class="badge shrink-0 !px-2.5 !py-1 bg-emerald-50 text-emerald-700 font-bold flex items-center gap-1">' +
+      ic('check', 'w-3 h-3') + ' Selesai (' + r.persen + '%)</span>';
+  } else if (r.terisi > 0) {
+    badgeHtml = '<span class="badge shrink-0 !px-2.5 !py-1 bg-amber-50 text-amber-700 font-bold">' +
+      'Sedang Dinilai (' + r.terisi + '/' + r.jumlahSel + ')</span>';
+  } else {
+    badgeHtml = '<span class="badge shrink-0 !px-2.5 !py-1 bg-slate-100 text-slate-500 font-bold">' +
+      'Belum Dinilai</span>';
+  }
+
+  const nextMateri = allMateri && allMateri[mi + 1];
+  const nextBtnHtml = nextMateri && !locked
+    ? '<div class="mt-4 pt-3 border-t border-slate-100 flex justify-end">' +
+      '<button type="button" class="btn-soft !py-1.5 !px-3 !text-xs font-bold text-teal-700 bg-teal-50 hover:bg-teal-100 flex items-center gap-1.5" onclick="wizGoNextMateri(\'' + m.id + '\',\'' + nextMateri.id + '\')">' +
+      'Lanjut ke: ' + esc(nextMateri.no + ' ' + nextMateri.nama) + ' ' + ARROW_R + '</button></div>'
+    : '';
+
+  return '<div class="materi-card card ' + (mi === 0 ? 'mt-2 ' : '') + 'mb-4 anim-in ' + (isOpen ? 'open ' : '') + (locked ? 'locked' : '') + '" id="mc-' + m.id + '" style="scroll-margin-top:140px">' +
+    '<button type="button" class="w-full flex items-center gap-3.5 px-4 py-4 sm:px-5 text-left hover:bg-slate-50/70 transition rounded-3xl" onclick="wizToggle(\'' + m.id + '\')">' +
     '<div class="flex-1 min-w-0">' +
     '<p class="font-extrabold text-sm sm:text-[15px] text-slate-800 leading-snug">' + m.no + '  ' + esc(m.nama) + '</p>' +
     (m.catatanKaki ? '<p class="text-[11px] text-slate-400 mt-1 leading-snug pr-2">' + esc(m.catatanKaki) + '</p>' : '') +
     '</div>' +
-    '<span id="mprog-' + m.id + '" class="badge shrink-0 !px-3 !py-1.5 ' + (r.lengkap ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600') + '">' + r.terisi + '/' + r.jumlahSel + '</span>' +
+    '<div class="shrink-0 flex items-center gap-2" id="mprog-' + m.id + '">' + badgeHtml + '</div>' +
     '<svg class="materi-chev w-5 h-5 text-slate-400 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>' +
     '</button>' +
     /* 3 tingkat: grid → overflow-hidden (polos) → .m-inner (padding) */
@@ -584,7 +647,7 @@ function materiCardHtml(m, mi, sid) {
     '<div class="flex items-center justify-between gap-3 mt-2">' +
     '<span class="text-[10px] font-bold text-slate-400">' + (m.pilihTerbaik ? 'Skor = ' + m.pilihTerbaik + ' item terbaik' : 'Skor perolehan') + '</span>' +
     '<span id="mpersen-' + m.id + '" class="text-[11px] font-extrabold text-right ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600') + '">' +
-    r.skor + '/' + r.maks + (r.lengkap ? '  Nilai ' + r.persen + '%' : '  belum lengkap') + '</span>' +
+    r.skor + '/' + r.maks + (r.lengkap ? '  Nilai ' + r.persen + '%' : '  (' + r.terisi + '/' + r.jumlahSel + ' aspek terisi)') + '</span>' +
     '</div>' +
     (m.tipe !== 'tunggal' ? '<p class="text-[10px] font-bold text-slate-400 mt-2.5">Skor: 3 = ' + esc(scoreLabel(m, 3)) + '  2 = ' + esc(scoreLabel(m, 2)) + '  1 = ' + esc(scoreLabel(m, 1)) + '</p>' : '') +
     '<div class="mt-3">' + materiItemsHtml(m, d, r) + '</div>' +
@@ -592,6 +655,7 @@ function materiCardHtml(m, mi, sid) {
     '<label class="label">Informasi Tambahan / Komentar / Catatan <span class="text-rose-500">*</span></label>' +
     '<textarea rows="2" required aria-required="true" class="input resize-none" placeholder="Catatan untuk ' + esc(m.nama) + ' (wajib diisi)..." oninput="wizCatatan(\'' + m.id + '\', this.value)">' + esc(d.catatan || '') + '</textarea>' +
     '</div>' +
+    nextBtnHtml +
     '</div></div></div></div>';
 }
 
@@ -807,11 +871,70 @@ function wizDoneAnim() {
 function wizToggle(mid) {
   const card = $('#mc-' + mid); if (!card) return;
   const body = card.querySelector('.materi-body');
+  if (!body) return;
   const willOpen = body.classList.contains('closed');
+  if (!WZ.ui.open) WZ.ui.open = {};
+
+  if (willOpen) {
+    // Accordion: jika satu materi dibuka, minimize materi lain agar layar tetap rapi & fokus
+    $$('.materi-card').forEach(c => {
+      if (c !== card) {
+        c.classList.remove('open');
+        const b = c.querySelector('.materi-body');
+        if (b) b.classList.add('closed');
+        const otherMid = c.id.replace('mc-', '');
+        WZ.ui.open[otherMid] = false;
+      }
+    });
+  }
+
   body.classList.toggle('closed', !willOpen);
   card.classList.toggle('open', willOpen);
   WZ.ui.open[mid] = willOpen;
+
+  if (willOpen) {
+    setTimeout(() => {
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 80);
+  }
 }
+
+function wizCollapseAllMateri() {
+  if (!WZ) return;
+  if (!WZ.ui.open) WZ.ui.open = {};
+  $$('.materi-card').forEach(c => {
+    c.classList.remove('open');
+    const b = c.querySelector('.materi-body');
+    if (b) b.classList.add('closed');
+    const mid = c.id.replace('mc-', '');
+    WZ.ui.open[mid] = false;
+  });
+}
+
+function wizExpandAllMateri() {
+  if (!WZ) return;
+  if (!WZ.ui.open) WZ.ui.open = {};
+  $$('.materi-card').forEach(c => {
+    c.classList.add('open');
+    const b = c.querySelector('.materi-body');
+    if (b) b.classList.remove('closed');
+    const mid = c.id.replace('mc-', '');
+    WZ.ui.open[mid] = true;
+  });
+}
+
+function wizGoNextMateri(currentMid, nextMid) {
+  if (!WZ) return;
+  const currCard = $('#mc-' + currentMid);
+  if (currCard) {
+    currCard.classList.remove('open');
+    const b = currCard.querySelector('.materi-body');
+    if (b) b.classList.add('closed');
+    if (WZ.ui && WZ.ui.open) WZ.ui.open[currentMid] = false;
+  }
+  wizToggle(nextMid);
+}
+
 function wizScore(mid, iid, aid, val, btn) {
   if (!WZ || WZ.submitted) return;
   if (typeof pinPending === 'function' && pinPending()) { showPinGate(); return; }
@@ -856,8 +979,15 @@ function wizUpdateMateriUi(mid) {
   const r = calcMateri(m, WZ.data[mid]);
   const prog = $('#mprog-' + mid);
   if (prog) {
-    prog.textContent = r.terisi + '/' + r.jumlahSel;
-    prog.className = 'badge shrink-0 ' + (r.lengkap ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600');
+    if (r.lengkap) {
+      prog.innerHTML = '<span class="badge shrink-0 !px-2.5 !py-1 bg-emerald-50 text-emerald-700 font-bold flex items-center gap-1">' +
+        ic('check', 'w-3 h-3') + ' Selesai (' + r.persen + '%)</span>';
+    } else if (r.terisi > 0) {
+      prog.innerHTML = '<span class="badge shrink-0 !px-2.5 !py-1 bg-amber-50 text-amber-700 font-bold">' +
+        'Sedang Dinilai (' + r.terisi + '/' + r.jumlahSel + ')</span>';
+    } else {
+      prog.innerHTML = '<span class="badge shrink-0 !px-2.5 !py-1 bg-slate-100 text-slate-500 font-medium">Belum Dinilai</span>';
+    }
   }
   const bar = $('#mbar-' + mid);
   if (bar) {
@@ -866,8 +996,8 @@ function wizUpdateMateriUi(mid) {
   }
   const pct = $('#mpersen-' + mid);
   if (pct) {
-    pct.textContent = r.skor + '/' + r.maks + (r.lengkap ? '  Nilai ' + r.persen + '%' : '  belum lengkap');
-    pct.className = 'text-[11px] font-extrabold ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600');
+    pct.textContent = r.skor + '/' + r.maks + (r.lengkap ? '  Nilai ' + r.persen + '%' : '  (' + r.terisi + '/' + r.jumlahSel + ' aspek terisi)');
+    pct.className = 'text-[11px] font-extrabold text-right ' + (r.lengkap ? 'text-teal-700' : 'text-amber-600');
   }
   if (m.pilihTerbaik) {
     $$('#mc-' + mid + ' [data-hitmark]').forEach(el => {
@@ -880,7 +1010,7 @@ function wizUpdateMateriUi(mid) {
   renderPills();
   if (G()) {
     if (bar) gsap.fromTo(bar, { opacity: .55 }, { opacity: 1, duration: .45, ease: 'power1.out' });
-    if (r.lengkap && prog) gsap.fromTo(prog, { scale: 1.25 }, { scale: 1, duration: .4, ease: 'back.out(2)' });
+    if (r.lengkap && prog) gsap.fromTo(prog, { scale: 1.15 }, { scale: 1, duration: .35, ease: 'back.out(2)' });
   }
 }
 function wizUpdateHero() {
@@ -1196,6 +1326,10 @@ async function wizFinalize(sid) {
     WZ.data.meta = res.assessment.data.meta;
     wizRefreshSteps();
     WZ.dirty = false;
+    try {
+      const init = await api('getInitialData');
+      state.riwayat = init.riwayat || state.riwayat;
+    } catch (_) { /* pembaruan riwayat akan dicoba lagi saat penyegaran */ }
     toast(s.nama + ' difinalisasi ✓', 'success');
     renderStep(); renderBar();
   } catch (e) { toast(e.message, 'error', 5000); }
