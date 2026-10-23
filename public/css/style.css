@@ -90,6 +90,8 @@ body.in-wizard #bottomnav { display: none; }
 }
 .participant-option:hover { border-color: #5eead4; background: #f0fdfa; }
 .participant-option:active { transform: scale(.99); }
+.participant-option.is-selesai { background: #f8fafc; border-color: #e2e8f0; opacity: 0.9; }
+.participant-option.is-selesai:hover { background: #f1f5f9; border-color: #cbd5e1; opacity: 1; }
 .participant-avatar {
   display: grid;
   place-items: center;

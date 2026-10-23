@@ -142,7 +142,7 @@ function wizardStart(existing) {
       tanggal: existing.tanggal || todayStr(),
       data: normalizeWizardData(existing.data),
       step: 0, dirty: false, submitted: false, saving: false, done: false,
-      mode: 'lama', pesertaBaru: null, jumpTarget: null, ui: { open: {} }, hasilFinal: null,
+      mode: 'lama', pesertaBaru: null, jumpTarget: null, ui: { open: {} }, hasilFinal: null, pesertaFilter: 'all',
       isCreator: existing.creator === userNama || Auth.isStaff(),
       autoFails: 0, autoDelay: 1500
     };
@@ -153,7 +153,7 @@ function wizardStart(existing) {
       data: emptyWizardData(),
       step: 0, dirty: false, submitted: false, saving: false, done: false,
       mode: 'lama', pesertaBaru: { nama: '', nomor: '', asal_tk: '' },
-      jumpTarget: null, ui: { open: {} }, hasilFinal: null,
+      jumpTarget: null, ui: { open: {} }, hasilFinal: null, pesertaFilter: 'all',
       isCreator: true, autoFails: 0, autoDelay: 1500
     };
   }
@@ -295,21 +295,113 @@ function shortStudentName(name, maxLength) {
   const limit = maxLength || 20;
   return full.length > limit ? full.slice(0, limit).replace(/\s+$/, '') + '...' : full;
 }
-function pesertaListHtml(q) {
+
+function getPesertaStatus(p) {
+  let status = p.status_penilaian;
+  let sentraSelesai = Number(p.sentra_selesai || 0);
+  let totalSentra = Number(p.total_sentra || 0) || (state.schema && state.schema.sentra ? state.schema.sentra.length : 3);
+
+  // Cross-check dengan riwayat lokal jika ada
+  const asm = (state.riwayat || []).find(r => r.id_peserta === p.id_peserta || (p.id_assessment && r.id === p.id_assessment));
+  if (asm) {
+    const sentras = state.schema && state.schema.sentra ? state.schema.sentra : [];
+    if (sentras.length) totalSentra = sentras.length;
+    const metaSentra = (asm.meta && asm.meta.sentra) || {};
+    let finalCount = 0;
+    sentras.forEach(s => {
+      if ((metaSentra[s.id] || {}).status === 'FINAL') finalCount++;
+    });
+    sentraSelesai = finalCount;
+    if (asm.status === 'SUBMITTED' || (totalSentra > 0 && finalCount >= totalSentra)) {
+      status = 'SELESAI';
+    } else if (finalCount > 0 || asm.status === 'DRAFT') {
+      status = 'PROSES';
+    }
+  }
+
+  if (!status) {
+    status = (Number(p.jumlah_assessment || 0) > 0 || p.id_assessment) ? 'PROSES' : 'BELUM';
+  }
+
+  return {
+    status, // 'BELUM' | 'PROSES' | 'SELESAI'
+    sentraSelesai,
+    totalSentra
+  };
+}
+
+function pesertaStatusBadgeHtml(st) {
+  if (st.status === 'SELESAI') {
+    return '<span class="badge shrink-0 !px-2.5 !py-1 text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200/70 rounded-xl flex items-center gap-1">' +
+      ic('check', 'w-3 h-3') + ' Selesai</span>';
+  }
+  if (st.status === 'PROSES') {
+    return '<span class="badge shrink-0 !px-2.5 !py-1 text-[11px] font-extrabold bg-amber-50 text-amber-700 border border-amber-200/70 rounded-xl flex items-center gap-1.5">' +
+      '<span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse"></span>Proses (' + st.sentraSelesai + '/' + st.totalSentra + ')</span>';
+  }
+  return '<span class="badge shrink-0 !px-2.5 !py-1 text-[11px] font-bold bg-slate-100 text-slate-500 border border-slate-200/60 rounded-xl">Belum Dinilai</span>';
+}
+
+function filterPill(filter, label, active) {
+  return '<button type="button" data-filter="' + filter + '" class="px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition ' +
+    (active ? 'bg-teal-700 text-white shadow-sm' : 'bg-slate-100 text-slate-600 hover:bg-slate-200/80') + '" onclick="wizFilterPeserta(\'' + filter + '\')">' + label + '</button>';
+}
+
+function wizFilterPeserta(filter) {
+  if (!WZ) return;
+  WZ.pesertaFilter = filter;
+  const q = ($('#peserta-q') ? $('#peserta-q').value : '');
+  const el = $('#peserta-list');
+  if (el) el.innerHTML = pesertaListHtml(q, filter);
+  $$('#peserta-filter-tabs button').forEach(b => {
+    const isThis = b.dataset.filter === filter;
+    b.className = isThis
+      ? 'px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition bg-teal-700 text-white shadow-sm'
+      : 'px-3 py-1.5 rounded-xl text-[11px] font-extrabold whitespace-nowrap transition bg-slate-100 text-slate-600 hover:bg-slate-200/80';
+  });
+}
+
+function pesertaListHtml(q, filter) {
   const ql = String(q || '').toLowerCase().trim();
-  let list = state.peserta.slice();
-  if (ql) list = list.filter(p => (p.nama + ' ' + (p.nomor_peserta || '') + ' ' + (p.asal_tk || '') + ' ' + p.id_peserta).toLowerCase().indexOf(ql) >= 0);
-  if (!list.length) return '<p class="text-sm text-slate-400 text-center py-8 leading-relaxed">Peserta tidak ditemukan.<br>Gunakan tab <b>Peserta Baru</b> untuk mendaftarkan.</p>';
-  return list.slice(0, 40).map(p =>
-    '<button type="button" role="option" class="participant-option" aria-label="Pilih ' + esc(p.nama) + '" onclick="wizPilihPeserta(\'' + esc(p.id_peserta) + '\')">' +
-    '<span class="participant-avatar">' + esc(inisial(p.nama)) + '</span>' +
-    '<span class="participant-copy">' +
-    '<span class="participant-name" title="' + esc(p.nama) + '">' + esc(shortStudentName(p.nama)) + '</span>' +
-    '<span class="participant-meta" title="' + esc((p.nomor_peserta || '-') + (p.asal_tk ? ' • ' + p.asal_tk : '')) + '"><b>No.</b> ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? '<i>•</i>' + esc(p.asal_tk) : '') + '</span>' +
-    '</span>' +
-    (p.jumlah_assessment ? '<span class="badge bg-blue-50 text-blue-600 shrink-0">' + p.jumlah_assessment + ' Penilai</span>' : '') +
-    '<span class="participant-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>' +
-    '</button>').join('');
+  const f = filter || (WZ && WZ.pesertaFilter) || 'all';
+  let list = (state.peserta || []).slice();
+
+  if (ql) {
+    list = list.filter(p => (p.nama + ' ' + (p.nomor_peserta || '') + ' ' + (p.asal_tk || '') + ' ' + p.id_peserta).toLowerCase().indexOf(ql) >= 0);
+  }
+
+  if (f && f !== 'all') {
+    list = list.filter(p => {
+      const st = getPesertaStatus(p);
+      return st.status === f;
+    });
+  }
+
+  if (!list.length) {
+    const msg = f === 'SELESAI'
+      ? 'Belum ada peserta yang selesai di semua sentra.'
+      : f === 'PROSES'
+      ? 'Tidak ada peserta yang sedang dalam proses penilaian.'
+      : f === 'BELUM'
+      ? 'Tidak ada peserta dengan status belum dinilai.'
+      : 'Peserta tidak ditemukan.<br>Gunakan tab <b>Peserta Baru</b> untuk mendaftarkan.';
+    return '<p class="text-xs text-slate-400 text-center py-8 leading-relaxed">' + msg + '</p>';
+  }
+
+  return list.slice(0, 50).map(p => {
+    const st = getPesertaStatus(p);
+    const badgeHtml = pesertaStatusBadgeHtml(st);
+    const isSelesai = st.status === 'SELESAI';
+    return '<button type="button" role="option" class="participant-option ' + (isSelesai ? 'is-selesai ' : '') + '" aria-label="Pilih ' + esc(p.nama) + ' (' + st.status + ')" onclick="wizPilihPeserta(\'' + esc(p.id_peserta) + '\')">' +
+      '<span class="participant-avatar ' + (isSelesai ? '!bg-emerald-50 !text-emerald-700' : '') + '">' + esc(inisial(p.nama)) + '</span>' +
+      '<span class="participant-copy">' +
+      '<span class="participant-name" title="' + esc(p.nama) + '">' + esc(shortStudentName(p.nama)) + '</span>' +
+      '<span class="participant-meta" title="' + esc((p.nomor_peserta || '-') + (p.asal_tk ? ' • ' + p.asal_tk : '')) + '"><b>No.</b> ' + esc(p.nomor_peserta || '-') + (p.asal_tk ? '<i>•</i>' + esc(p.asal_tk) : '') + '</span>' +
+      '</span>' +
+      badgeHtml +
+      '<span class="participant-arrow" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span>' +
+      '</button>';
+  }).join('');
 }
 function stepDataHtml() {
   const hasP = !!WZ.id_peserta;
@@ -349,10 +441,26 @@ function stepDataHtml() {
         '<div><label class="label">Asal TK / RA / PAUD</label><input class="input" value="' + esc(pb.asal_tk) + '" oninput="wizField(\'nb_asal_tk\', this.value)" placeholder="Opsional" readonly></div>' +
         '</div></div>';
     } else {
+      const currFilter = (WZ && WZ.pesertaFilter) || 'all';
+      let countBelum = 0, countProses = 0, countSelesai = 0;
+      (state.peserta || []).forEach(p => {
+        const s = getPesertaStatus(p).status;
+        if (s === 'SELESAI') countSelesai++;
+        else if (s === 'PROSES') countProses++;
+        else countBelum++;
+      });
+      const totalCount = (state.peserta || []).length;
+
       html += '<div class="relative mt-4">' + ic('search', 'w-5 h-5 absolute left-5 top-1/2 -translate-y-1/2 text-slate-400') +
         '<label class="sr-only" for="peserta-q">Cari peserta terdaftar</label>' +
         '<input id="peserta-q" class="input pad-icon" placeholder="Cari nama / nomor peserta..." aria-label="Cari peserta terdaftar" oninput="wizSearchPeserta(this.value)"></div>' +
-        '<div id="peserta-list" role="listbox" aria-label="Daftar peserta" class="peserta-picker-list mt-3 grid gap-2.5 pr-1">' + pesertaListHtml('') + '</div>';
+        '<div class="flex items-center gap-1.5 mt-2.5 overflow-x-auto py-0.5" id="peserta-filter-tabs">' +
+        filterPill('all', 'Semua (' + totalCount + ')', currFilter === 'all') +
+        filterPill('BELUM', 'Belum Dinilai (' + countBelum + ')', currFilter === 'BELUM') +
+        filterPill('PROSES', 'Proses (' + countProses + ')', currFilter === 'PROSES') +
+        filterPill('SELESAI', 'Selesai (' + countSelesai + ')', currFilter === 'SELESAI') +
+        '</div>' +
+        '<div id="peserta-list" role="listbox" aria-label="Daftar peserta" class="peserta-picker-list mt-2.5 grid gap-2.5 pr-1">' + pesertaListHtml('', currFilter) + '</div>';
     }
   }
   html += '</div>';
@@ -380,11 +488,34 @@ function wizSetMode(mode) {
   renderStep();
 }
 function wizSearchPeserta(q) {
-  const el = $('#peserta-list'); if (el) el.innerHTML = pesertaListHtml(q);
+  const el = $('#peserta-list');
+  if (el) el.innerHTML = pesertaListHtml(q, WZ ? WZ.pesertaFilter : 'all');
 }
 async function wizPilihPeserta(id) {
   const p = state.peserta.find(x => x.id_peserta === id); if (!p) return;
-  if (p.jumlah_assessment > 0) {
+  const stInfo = getPesertaStatus(p);
+
+  if (stInfo.status === 'SELESAI') {
+    const isStaff = Auth.isStaff();
+    const ex = (state.riwayat || []).find(r => r.id_peserta === p.id_peserta);
+    const asmId = ex ? ex.id : p.id_assessment;
+    if (isStaff && asmId) {
+      const buka = await confirmModal({
+        title: 'Penilaian Sudah Selesai',
+        html: '<p class="text-sm">Penilaian ananda <b>' + esc(p.nama) + '</b> sudah selesai di semua sentra.</p><p class="text-xs text-slate-500 mt-2">Sebagai Koordinator/Admin, apakah Anda ingin membuka rekap penilaian ini?</p>',
+        confirmText: 'Buka Rekap',
+        cancelText: 'Tutup'
+      });
+      if (buka) {
+        try { const res = await api('getAssessment', asmId); wizardStart(res.assessment); } catch (err) { toast(err.message, 'error'); }
+      }
+      return;
+    }
+    toast('Penilaian ananda ' + p.nama + ' sudah selesai di semua sentra.', 'info', 3500);
+    return;
+  }
+
+  if (p.jumlah_assessment > 0 || p.id_assessment) {
     const ex = (state.riwayat || []).find(r => r.id_peserta === p.id_peserta);
     if (ex) {
       const buka = await confirmModal({
@@ -399,10 +530,11 @@ async function wizPilihPeserta(id) {
       }
       return;
     }
-    if (p.id_assessment && Auth.user.role === 'ASSESSOR') {
+    const asmId = p.id_assessment || (ex ? ex.id : null);
+    if (asmId && Auth.user.role === 'ASSESSOR') {
       try {
-        const claim = await api('claimNextSentra', p.id_assessment);
-        const res = await api('getAssessment', p.id_assessment);
+        const claim = await api('claimNextSentra', asmId);
+        const res = await api('getAssessment', asmId);
         wizardStart(res.assessment);
         const label = SENTRA_SHORT[claim.sentraId] || sentraName(claim.sentraId);
         toast('Siswa dipilih. Giliran ' + label + ' berhasil diklaim.', 'success', 3000);

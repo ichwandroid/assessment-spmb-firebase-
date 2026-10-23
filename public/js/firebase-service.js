@@ -295,12 +295,29 @@ const FirebaseService = {
 
     const asmMap = {};
     const countMap = {};
+    const asmDetailMap = {};
+    const sentraList = (schema && schema.sentra) ? schema.sentra : (FORM_SCHEMA && FORM_SCHEMA.sentra ? FORM_SCHEMA.sentra : []);
+    const totalSentra = sentraList.length || 3;
+
     assessmentSnap.forEach(doc => {
       const a = doc.data();
       const pesertaId = a.idPeserta || a.id_peserta;
       if (!pesertaId) return;
       asmMap[pesertaId] = doc.id;
       countMap[pesertaId] = (countMap[pesertaId] || 0) + 1;
+
+      const metaSentra = (a.meta && a.meta.sentra) || {};
+      let finalCount = 0;
+      sentraList.forEach(s => {
+        if ((metaSentra[s.id] || {}).status === 'FINAL') finalCount++;
+      });
+      const isComplete = a.status === 'SUBMITTED' || (totalSentra > 0 && finalCount >= totalSentra);
+      asmDetailMap[pesertaId] = {
+        id: doc.id,
+        status: isComplete ? 'SELESAI' : 'PROSES',
+        finalCount: finalCount,
+        totalSentra: totalSentra
+      };
     });
 
     const blockedPeserta = new Set();
@@ -316,6 +333,8 @@ const FirebaseService = {
 
     const peserta = pesertaSnap.docs.filter(doc => !blockedPeserta.has(doc.id)).map(doc => {
       const d = doc.data();
+      const asmDetail = asmDetailMap[d.id];
+      const statusPenilaian = !asmDetail ? 'BELUM' : asmDetail.status;
       return {
         id_peserta: d.id,
         nama: d.nama,
@@ -323,7 +342,10 @@ const FirebaseService = {
         asal_tk: d.asalSekolah || d.asal_tk || '',
         waktu_dibuat: d.waktuDibuat || '',
         id_assessment: asmMap[d.id] || null,
-        jumlah_assessment: countMap[d.id] || 0
+        jumlah_assessment: countMap[d.id] || 0,
+        status_penilaian: statusPenilaian,
+        sentra_selesai: asmDetail ? asmDetail.finalCount : 0,
+        total_sentra: totalSentra
       };
     });
 
@@ -353,12 +375,28 @@ const FirebaseService = {
     ]);
     const asmMap = {};
     const countMap = {};
+    const asmDetailMap = {};
+    const sentraList = FORM_SCHEMA && FORM_SCHEMA.sentra ? FORM_SCHEMA.sentra : [];
+    const totalSentra = sentraList.length || 3;
+
     asmSnap.forEach(d => {
       const data = d.data();
       const pId = data.idPeserta || data.id_peserta;
       if (pId) {
         asmMap[pId] = d.id;
         countMap[pId] = (countMap[pId] || 0) + 1;
+        const metaSentra = (data.meta && data.meta.sentra) || {};
+        let finalCount = 0;
+        sentraList.forEach(s => {
+          if ((metaSentra[s.id] || {}).status === 'FINAL') finalCount++;
+        });
+        const isComplete = data.status === 'SUBMITTED' || (totalSentra > 0 && finalCount >= totalSentra);
+        asmDetailMap[pId] = {
+          id: d.id,
+          status: isComplete ? 'SELESAI' : 'PROSES',
+          finalCount: finalCount,
+          totalSentra: totalSentra
+        };
       }
     });
 
@@ -375,6 +413,8 @@ const FirebaseService = {
 
     let list = snap.docs.filter(d => !blockedPeserta.has(d.id)).map(d => {
       const data = d.data();
+      const asmDetail = asmDetailMap[data.id];
+      const statusPenilaian = !asmDetail ? 'BELUM' : asmDetail.status;
       return {
         id_peserta: data.id,
         nama: data.nama,
@@ -382,7 +422,10 @@ const FirebaseService = {
         asal_tk: data.asalSekolah || data.asal_tk || '',
         waktu_dibuat: data.waktuDibuat || '',
         id_assessment: asmMap[data.id] || null,
-        jumlah_assessment: countMap[data.id] || 0
+        jumlah_assessment: countMap[data.id] || 0,
+        status_penilaian: statusPenilaian,
+        sentra_selesai: asmDetail ? asmDetail.finalCount : 0,
+        total_sentra: totalSentra
       };
     });
     if (query) {
