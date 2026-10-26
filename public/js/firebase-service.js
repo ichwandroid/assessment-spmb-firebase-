@@ -715,6 +715,39 @@ const FirebaseService = {
     return list;
   },
 
+  async getAssessmentsForExport() {
+    const user = this.getCurrentUser();
+    if (!user) throw new Error('SESSION_EXPIRED');
+    if (user.role !== 'ADMIN') throw new Error('Akses ditolak — khusus Admin.');
+    const snap = await db.collection('assessments').get();
+    const assessments = [];
+    snap.forEach(doc => {
+      const d = doc.data() || {};
+      assessments.push({
+        id: doc.id,
+        id_peserta: d.idPeserta || d.id_peserta || '',
+        nama_peserta: d.namaPeserta || d.nama_peserta || '',
+        nomor_peserta: d.nomorPeserta || d.nomor_peserta || '',
+        asal_tk: d.asalTk || '',
+        tanggal: d.tanggal || '',
+        status: d.status || '',
+        assessor: d.assessor || d.usernameAssessor || '',
+        username_assessor: d.usernameAssessor || '',
+        nilai_akhir: d.nilaiAkhir == null ? '' : d.nilaiAkhir,
+        kode: d.kode || '',
+        kode_label: d.kodeLabel || '',
+        waktu_dibuat: d.waktuDibuat || '',
+        waktu_diubah: d.waktuDiubah || '',
+        waktu_submit: d.waktuSubmit || '',
+        data: d.data || {},
+        rerata: d.rerata || {},
+        calistung: d.calistung || {},
+        meta: d.meta || defaultMeta_()
+      });
+    });
+    return { ok: true, assessments };
+  },
+
   async claimNextSentra(id) {
     const user = this.getCurrentUser();
     if (!user) throw new Error('SESSION_EXPIRED');

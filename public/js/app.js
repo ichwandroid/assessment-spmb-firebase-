@@ -637,6 +637,7 @@ function showRiwayat() {
     '<div class="anim-in"><h2 class="text-xl font-extrabold text-slate-800">' + heading + '</h2>' +
     '<p class="text-sm text-slate-500 mt-0.5">' + description + '</p></div>' +
     '<div class="card p-4 mt-4 anim-in">' +
+    (Auth.isAdmin() ? '<div class="flex justify-end mb-3"><button id="r-export-csv" class="btn-soft !py-2.5 !px-3 !text-xs">' + ic('download', 'w-4 h-4') + ' Download CSV</button></div>' : '') +
     '<div class="relative">' + ic('search', 'w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400') +
     '<input id="rq" class="input pad-icon" placeholder="Cari nama / nomor / pembuat..." value="' + esc(state.rQuery) + '"></div>' +
     (Auth.isAdmin() ? '<div class="mt-3"><label for="r-user-filter" class="label">Lihat assessment berdasarkan pengguna</label><select id="r-user-filter" class="input"><option value="ALL">Semua pengguna</option>' + (state.reviewUsers || []).map(u => '<option value="' + esc(u.username) + '" ' + (state.rUser === u.username ? 'selected' : '') + '>' + esc(u.nama + '  ' + u.username) + '</option>').join('') + '</select><p class="text-[11px] text-slate-400 mt-1">Termasuk assessment yang dibuat atau dikerjakan pengguna pada salah satu sentra.</p></div>' : '') +
@@ -646,6 +647,8 @@ function showRiwayat() {
     '</div></div>' +
     '<div id="rlist" class="mt-4 grid gap-3"></div>');
   renderRiwayatList();
+  const exportButton = $('#r-export-csv');
+  if (exportButton) exportButton.addEventListener('click', downloadAssessmentsCsv);
   $('#rq').addEventListener('input', e => { state.rQuery = e.target.value; renderRiwayatList(); });
   const userFilter = $('#r-user-filter');
   if (userFilter) userFilter.addEventListener('change', e => { state.rUser = e.target.value; renderRiwayatList(); });
@@ -661,6 +664,57 @@ function showRiwayat() {
     $$('#view [data-rf]').forEach(x => x.classList.toggle('on', x.dataset.rf === state.rFilter));
     renderRiwayatList();
   }));
+}
+async function downloadAssessmentsCsv() {
+  if (!Auth.isAdmin()) { toast('Fitur ini khusus Admin.', 'error'); return; }
+  const button = $('#r-export-csv');
+  if (button) { button.disabled = true; button.textContent = 'Menyiapkan CSV...'; }
+  try {
+    const res = await api('getAssessmentsForExport');
+    const q = (state.rQuery || '').trim().toLowerCase();
+    let items = res.assessments || [];
+    if (q) items = items.filter(a => (String(a.nama_peserta || '') + ' ' + String(a.nomor_peserta || '') + ' ' + String(a.assessor || '')).toLowerCase().includes(q));
+    if (state.rUser !== 'ALL') items = items.filter(a => a.username_assessor === state.rUser || Object.values((a.meta && a.meta.sentra) || {}).some(s => s && s.owner === state.rUser));
+    if (state.rFilter !== 'ALL') items = items.filter(a => a.status === state.rFilter);
+    if (!items.length) { toast('Tidak ada assessment untuk diunduh.', 'error'); return; }
+
+    const flatten = (value, prefix, out) => {
+      if (value == null) { out[prefix] = ''; return; }
+      if (Array.isArray(value)) { if (!value.length) out[prefix] = ''; else value.forEach((v, i) => flatten(v, prefix + '[' + i + ']', out)); return; }
+      if (typeof value === 'object') {
+        const keys = Object.keys(value);
+        if (!keys.length) out[prefix] = '';
+        else keys.forEach(k => flatten(value[k], prefix ? prefix + '.' + k : k, out));
+        return;
+      }
+      out[prefix] = String(value);
+    };
+    const fixed = ['ID Assessment', 'ID Peserta', 'Nama Peserta', 'Nomor Peserta', 'Asal TK', 'Tanggal', 'Status', 'Assessor', 'Username Assessor', 'Nilai Akhir', 'Kode Hasil', 'Label Kode', 'Waktu Dibuat', 'Waktu Diubah', 'Waktu Submit'];
+    const fieldNames = ['id', 'id_peserta', 'nama_peserta', 'nomor_peserta', 'asal_tk', 'tanggal', 'status', 'assessor', 'username_assessor', 'nilai_akhir', 'kode', 'kode_label', 'waktu_dibuat', 'waktu_diubah', 'waktu_submit'];
+    const rows = items.map(a => {
+      const row = {};
+      fieldNames.forEach((key, i) => { row[fixed[i]] = a[key] == null ? '' : String(a[key]); });
+      flatten(a.data || {}, 'Data', row);
+      flatten(a.rerata || {}, 'Rerata', row);
+      flatten(a.calistung || {}, 'Calistung', row);
+      flatten(a.meta || {}, 'Meta', row);
+      return row;
+    });
+    const headers = fixed.concat(Array.from(new Set(rows.flatMap(r => Object.keys(r).filter(k => fixed.indexOf(k) < 0)))).sort());
+    const csvCell = value => {
+      let s = String(value == null ? '' : value);
+      if (/^[\s]*[=+\-@]/.test(s)) s = "'" + s;
+      return '"' + s.replace(/"/g, '""') + '"';
+    };
+    const csv = '\uFEFF' + [headers, ...rows.map(row => headers.map(h => row[h] || ''))].map(row => row.map(csvCell).join(',')).join('\r\n');
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'assessment-' + todayStr() + '.csv';
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+    toast(items.length + ' assessment berhasil diunduh.');
+  } catch (e) { toast('Gagal mengunduh assessment: ' + e.message, 'error'); }
+  finally { const current = $('#r-export-csv'); if (current) { current.disabled = false; current.innerHTML = ic('download', 'w-4 h-4') + ' Download CSV'; } }
 }
 function renderRiwayatList() {
   const box = $('#rlist'); if (!box) return;
