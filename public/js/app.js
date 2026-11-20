@@ -637,7 +637,7 @@ function showRiwayat() {
     '<div class="anim-in"><h2 class="text-xl font-extrabold text-slate-800">' + heading + '</h2>' +
     '<p class="text-sm text-slate-500 mt-0.5">' + description + '</p></div>' +
     '<div class="card p-4 mt-4 anim-in">' +
-    (Auth.isAdmin() ? '<div class="flex justify-end mb-3"><button id="r-export-csv" class="btn-soft !py-2.5 !px-3 !text-xs">' + ic('download', 'w-4 h-4') + ' Download CSV</button></div>' : '') +
+    (Auth.isStaff() ? '<div class="flex justify-end mb-3"><button id="r-export-csv" class="btn-soft !py-2.5 !px-3 !text-xs">' + ic('download', 'w-4 h-4') + ' Download CSV</button></div>' : '') +
     '<div class="relative">' + ic('search', 'w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400') +
     '<input id="rq" class="input pad-icon" placeholder="Cari nama / nomor / pembuat..." value="' + esc(state.rQuery) + '"></div>' +
     (Auth.isAdmin() ? '<div class="mt-3"><label for="r-user-filter" class="label">Lihat assessment berdasarkan pengguna</label><select id="r-user-filter" class="input"><option value="ALL">Semua pengguna</option>' + (state.reviewUsers || []).map(u => '<option value="' + esc(u.username) + '" ' + (state.rUser === u.username ? 'selected' : '') + '>' + esc(u.nama + '  ' + u.username) + '</option>').join('') + '</select><p class="text-[11px] text-slate-400 mt-1">Termasuk assessment yang dibuat atau dikerjakan pengguna pada salah satu sentra.</p></div>' : '') +
@@ -648,7 +648,7 @@ function showRiwayat() {
     '<div id="rlist" class="mt-4 grid gap-3"></div>');
   renderRiwayatList();
   const exportButton = $('#r-export-csv');
-  if (exportButton) exportButton.addEventListener('click', downloadAssessmentsCsv);
+  if (exportButton) exportButton.addEventListener('click', downloadAssessmentsCsvModal);
   $('#rq').addEventListener('input', e => { state.rQuery = e.target.value; renderRiwayatList(); });
   const userFilter = $('#r-user-filter');
   if (userFilter) userFilter.addEventListener('change', e => { state.rUser = e.target.value; renderRiwayatList(); });
@@ -665,8 +665,68 @@ function showRiwayat() {
     renderRiwayatList();
   }));
 }
-async function downloadAssessmentsCsv() {
-  if (!Auth.isAdmin()) { toast('Fitur ini khusus Admin.', 'error'); return; }
+function downloadAssessmentsCsvModal() {
+  if (!Auth.isStaff()) { toast('Fitur ini khusus Koordinator/Admin.', 'error'); return; }
+
+  const q = (state.rQuery || '').trim();
+  const filterDesc = state.rFilter !== 'ALL' ? `Filter status: <b>${state.rFilter}</b>` : 'Semua status';
+
+  modalOpen(
+    '<div>' +
+    '<div class="flex items-center gap-3 mb-4">' +
+    '<div class="w-10 h-10 rounded-2xl bg-teal-50 text-teal-600 grid place-items-center shrink-0">' + ic('download', 'w-5 h-5') + '</div>' +
+    '<div><h3 class="text-lg font-extrabold text-slate-800">Download Data Assessment (CSV)</h3>' +
+    '<p class="text-xs text-slate-500">Ekspor data hasil penilaian ke format spreadsheet Excel / CSV</p></div></div>' +
+
+    '<div class="space-y-4 text-xs">' +
+    '<div class="rounded-2xl bg-slate-50 border border-slate-200/70 p-3.5">' +
+    '<label class="block font-bold text-slate-700 mb-2">Pilih Format Data:</label>' +
+    '<div class="space-y-2">' +
+    '<label class="flex items-start gap-2.5 p-2 rounded-xl border border-teal-200 bg-white hover:bg-teal-50/40 cursor-pointer transition">' +
+    '<input type="radio" name="csv-type" value="summary" checked class="mt-0.5 text-teal-600 focus:ring-teal-500">' +
+    '<div><span class="font-bold text-slate-800 block">1. Rekapitulasi Penilaian (Direkomendasikan)</span>' +
+    '<span class="text-slate-500 text-[11px] block mt-0.5">Tampilan bersih & terstruktur: Identitas Siswa, Nilai Akhir, Calistung & Kode, Rerata Sentra, Nilai per Materi (%), Catatan Guru, dan Pengesahan.</span></div>' +
+    '</label>' +
+    '<label class="flex items-start gap-2.5 p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition">' +
+    '<input type="radio" name="csv-type" value="detailed" class="mt-0.5 text-teal-600 focus:ring-teal-500">' +
+    '<div><span class="font-bold text-slate-800 block">2. Detail Lengkap (+ Skor Tiap Butir Soal)</span>' +
+    '<span class="text-slate-500 text-[11px] block mt-0.5">Seluruh data rekapitulasi di atas ditambah skor masing-masing butir instrumen (1.1 s.d. 3.2) yang tersusun rapi urut per BAB.</span></div>' +
+    '</label>' +
+    '</div></div>' +
+
+    '<div class="rounded-2xl bg-slate-50 border border-slate-200/70 p-3.5">' +
+    '<label class="block font-bold text-slate-700 mb-2">Format Pemisah Kolom (Delimiter):</label>' +
+    '<div class="grid grid-cols-1 sm:grid-cols-2 gap-2">' +
+    '<label class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition">' +
+    '<input type="radio" name="csv-delim" value=";" checked class="text-teal-600 focus:ring-teal-500">' +
+    '<div><span class="font-bold text-slate-800 block">Titik Koma ( ; )</span><span class="text-[11px] text-teal-600">Standar Microsoft Excel Indonesia</span></div>' +
+    '</label>' +
+    '<label class="flex items-center gap-2 p-2 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 cursor-pointer transition">' +
+    '<input type="radio" name="csv-delim" value="," class="text-teal-600 focus:ring-teal-500">' +
+    '<div><span class="font-bold text-slate-800 block">Koma ( , )</span><span class="text-[11px] text-slate-500">Google Sheets / Excel US</span></div>' +
+    '</label>' +
+    '</div></div>' +
+
+    '<p class="text-[11px] text-slate-400">Data yang diekspor mengikuti filter tampilan saat ini (' + filterDesc + (q ? ', pencarian: "' + esc(q) + '"' : '') + ').</p>' +
+    '</div>' +
+
+    '<div class="flex justify-end gap-2.5 mt-5 pt-3 border-t border-slate-200/70">' +
+    '<button type="button" class="btn-soft !py-2.5 !px-4 text-xs" onclick="modalClose()">Batal</button>' +
+    '<button type="button" id="btn-do-download-csv" class="btn-primary !py-2.5 !px-5 text-xs font-bold flex items-center gap-1.5">' + ic('download', 'w-4 h-4') + ' Unduh CSV</button>' +
+    '</div></div>'
+  );
+
+  $('#btn-do-download-csv').addEventListener('click', async () => {
+    const typeEl = $('input[name="csv-type"]:checked');
+    const delimEl = $('input[name="csv-delim"]:checked');
+    const exportType = typeEl ? typeEl.value : 'summary';
+    const delimiter = delimEl ? delimEl.value : ';';
+    modalClose();
+    await executeDownloadAssessmentsCsv(exportType, delimiter);
+  });
+}
+
+async function executeDownloadAssessmentsCsv(exportType, delimiter) {
   const button = $('#r-export-csv');
   if (button) { button.disabled = true; button.textContent = 'Menyiapkan CSV...'; }
   try {
@@ -678,43 +738,176 @@ async function downloadAssessmentsCsv() {
     if (state.rFilter !== 'ALL') items = items.filter(a => a.status === state.rFilter);
     if (!items.length) { toast('Tidak ada assessment untuk diunduh.', 'error'); return; }
 
-    const flatten = (value, prefix, out) => {
-      if (value == null) { out[prefix] = ''; return; }
-      if (Array.isArray(value)) { if (!value.length) out[prefix] = ''; else value.forEach((v, i) => flatten(v, prefix + '[' + i + ']', out)); return; }
-      if (typeof value === 'object') {
-        const keys = Object.keys(value);
-        if (!keys.length) out[prefix] = '';
-        else keys.forEach(k => flatten(value[k], prefix ? prefix + '.' + k : k, out));
-        return;
+    const schema = (typeof getActiveFormSchema === 'function' ? getActiveFormSchema() : FORM_SCHEMA) || state.schema;
+
+    const headers = [
+      'No',
+      'Nomor / ID Peserta',
+      'Nama Peserta Didik',
+      'Asal TK/RA/PAUD',
+      'Tanggal',
+      'ID Assessment',
+      'Status Assessment',
+      'Kode Hasil Asesmen',
+      'Keterangan Kode Asesmen',
+      'Rerata Calistung (%)',
+      'Nilai Akhir Keseluruhan (%)'
+    ];
+
+    // 1. Rerata per Sentra (sesuai BAB IV TOTAL NILAI di lembar cetak)
+    schema.sentra.forEach((s, idx) => {
+      headers.push(`4.${idx + 1} Rerata ${s.nama.toUpperCase()} (%)`);
+    });
+
+    // 2. Rincian Nilai per Materi (sesuai BAB I - III di lembar cetak)
+    schema.sentra.forEach(s => {
+      s.materi.forEach(m => {
+        headers.push(`${m.no} ${m.nama} (%)`);
+        if (exportType === 'detailed') {
+          m.items.forEach(it => {
+            if (m.tipe === 'tunggal') {
+              const subNama = it.detail ? `${it.nama} [${it.detail}]` : it.nama;
+              headers.push(`Skor ${m.no} - ${subNama}`);
+            } else {
+              const aspekList = it.aspek || m.aspek || [];
+              aspekList.forEach(asp => {
+                headers.push(`Skor ${m.no} - ${it.nama} (${asp.nama})`);
+              });
+            }
+          });
+        }
+      });
+    });
+
+    // 3. Catatan / Informasi Tambahan per Sentra (sesuai BAB IV lembar cetak)
+    schema.sentra.forEach((s, idx) => {
+      headers.push(`Informasi Tambahan 4.${idx + 1} ${s.nama}`);
+    });
+
+    // 4. Catatan / Komentar Guru per Materi (sesuai lembar cetak)
+    schema.sentra.forEach(s => {
+      s.materi.forEach(m => {
+        headers.push(`Komentar / Catatan Guru ${m.no} ${m.nama}`);
+      });
+    });
+
+    // 5. Penilai & Pengesahan (sesuai lembar cetak)
+    schema.sentra.forEach(s => {
+      headers.push(`Penilai ${s.singkat || s.nama}`);
+    });
+    headers.push('Koordinator Assesmen');
+    headers.push('Waktu Submit');
+
+    const escapeCsv = val => {
+      let s = String(val == null ? '' : val).trim();
+      if (/^[\s]*[=+\-@]/.test(s)) s = "'" + s;
+      if (s.includes('"') || s.includes(delimiter) || s.includes('\n') || s.includes('\r')) {
+        return '"' + s.replace(/"/g, '""') + '"';
       }
-      out[prefix] = String(value);
+      return s;
     };
-    const fixed = ['ID Assessment', 'ID Peserta', 'Nama Peserta', 'Nomor Peserta', 'Asal TK', 'Tanggal', 'Status', 'Assessor', 'Username Assessor', 'Nilai Akhir', 'Kode Hasil', 'Label Kode', 'Waktu Dibuat', 'Waktu Diubah', 'Waktu Submit'];
-    const fieldNames = ['id', 'id_peserta', 'nama_peserta', 'nomor_peserta', 'asal_tk', 'tanggal', 'status', 'assessor', 'username_assessor', 'nilai_akhir', 'kode', 'kode_label', 'waktu_dibuat', 'waktu_diubah', 'waktu_submit'];
-    const rows = items.map(a => {
-      const row = {};
-      fieldNames.forEach((key, i) => { row[fixed[i]] = a[key] == null ? '' : String(a[key]); });
-      flatten(a.data || {}, 'Data', row);
-      flatten(a.rerata || {}, 'Rerata', row);
-      flatten(a.calistung || {}, 'Calistung', row);
-      flatten(a.meta || {}, 'Meta', row);
+
+    const rows = items.map((a, idx) => {
+      const data = a.data || {};
+      const hasil = (typeof hitungHasil_ === 'function') ? hitungHasil_(data) : { materi: {}, sentra: {} };
+      const meta = a.meta || {};
+      const metaSentra = meta.sentra || {};
+
+      const statusLabel = a.status === 'SUBMITTED' ? 'Selesai' : (a.status === 'SIAP_REVIEW' ? 'Siap Review' : 'Draft');
+      const tglFormatted = (typeof fmtTanggal === 'function') ? fmtTanggal(a.tanggal) : (a.tanggal || '');
+
+      const row = [
+        idx + 1,
+        a.nomor_peserta || a.nomorPeserta || a.nomor || a.id_peserta || '',
+        a.nama_peserta || a.namaPeserta || a.nama || '',
+        a.asal_tk || '-',
+        tglFormatted,
+        a.id || '',
+        statusLabel,
+        hasil.kode || a.kode || '-',
+        hasil.kodeLabel || a.kode_label || '-',
+        hasil.calistung != null ? hasil.calistung : (a.calistung != null ? a.calistung : '-'),
+        hasil.nilaiAkhir != null ? hasil.nilaiAkhir : (a.nilai_akhir != null ? a.nilai_akhir : '-')
+      ];
+
+      // Rerata Sentra
+      schema.sentra.forEach(s => {
+        row.push(hasil.sentra[s.id] != null ? hasil.sentra[s.id] : '-');
+      });
+
+      // Nilai Materi (+ Skor Aspek jika mode detailed)
+      schema.sentra.forEach(s => {
+        s.materi.forEach(m => {
+          const mHasil = hasil.materi[m.id];
+          row.push((mHasil && mHasil.persen != null) ? mHasil.persen : '-');
+
+          if (exportType === 'detailed') {
+            const mSkor = (data[m.id] && data[m.id].skor) || {};
+            m.items.forEach(it => {
+              if (m.tipe === 'tunggal') {
+                row.push(mSkor[it.id] != null ? mSkor[it.id] : '-');
+              } else {
+                const aspekList = it.aspek || m.aspek || [];
+                const itSkor = mSkor[it.id] || {};
+                aspekList.forEach(asp => {
+                  row.push(itSkor[asp.id] != null ? itSkor[asp.id] : '-');
+                });
+              }
+            });
+          }
+        });
+      });
+
+      // Informasi Tambahan Sentra
+      schema.sentra.forEach(s => {
+        row.push((data.catatanSentra && data.catatanSentra[s.id]) || '-');
+      });
+
+      // Catatan per Materi
+      schema.sentra.forEach(s => {
+        s.materi.forEach(m => {
+          row.push((data[m.id] && data[m.id].catatan) || '-');
+        });
+      });
+
+      // Penilai per Sentra
+      schema.sentra.forEach(s => {
+        const st = metaSentra[s.id] || {};
+        row.push(st.assessor || st.ownerName || st.owner || '-');
+      });
+
+      // Koordinator & Waktu Submit
+      const koord = (meta.koordinator && (meta.koordinator.nama || meta.koordinator.username)) || a.koordinator || '-';
+      row.push(koord);
+      row.push(a.waktu_submit || a.waktuSubmit || '-');
+
       return row;
     });
-    const headers = fixed.concat(Array.from(new Set(rows.flatMap(r => Object.keys(r).filter(k => fixed.indexOf(k) < 0)))).sort());
-    const csvCell = value => {
-      let s = String(value == null ? '' : value);
-      if (/^[\s]*[=+\-@]/.test(s)) s = "'" + s;
-      return '"' + s.replace(/"/g, '""') + '"';
-    };
-    const csv = '\uFEFF' + [headers, ...rows.map(row => headers.map(h => row[h] || ''))].map(row => row.map(csvCell).join(',')).join('\r\n');
-    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+
+    const csvLines = [headers, ...rows].map(r => r.map(escapeCsv).join(delimiter));
+    const csvContent = '\uFEFF' + csvLines.join('\r\n');
+
+    const filename = `assessment-${exportType}-${todayStr()}.csv`;
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'assessment-' + todayStr() + '.csv';
-    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
-    toast(items.length + ' assessment berhasil diunduh.');
-  } catch (e) { toast('Gagal mengunduh assessment: ' + e.message, 'error'); }
-  finally { const current = $('#r-export-csv'); if (current) { current.disabled = false; current.innerHTML = ic('download', 'w-4 h-4') + ' Download CSV'; } }
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+
+    toast(`${items.length} assessment berhasil diunduh.`, 'success', 3000);
+  } catch (e) {
+    toast('Gagal mengunduh assessment: ' + e.message, 'error');
+  } finally {
+    const current = $('#r-export-csv');
+    if (current) {
+      current.disabled = false;
+      current.innerHTML = ic('download', 'w-4 h-4') + ' Download CSV';
+    }
+  }
 }
 function renderRiwayatList() {
   const box = $('#rlist'); if (!box) return;

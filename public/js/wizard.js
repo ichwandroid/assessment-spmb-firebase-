@@ -95,13 +95,8 @@ function wizPayload() {
   return { id: WZ.id || null, id_peserta: WZ.id_peserta, creator: WZ.creator || '', tanggal: WZ.tanggal || '', active_sentra: step && step.type === 'sentra' ? step.sid : '', data: WZ.data };
 }
 function wizPriorUnfinalizedSentra(sid) {
-  if (!WZ || !Auth.user || Auth.user.role !== 'ASSESSOR') return null;
-  const current = WZ.data.meta.sentra[sid] || {};
-  if (current.owner && current.status !== 'FINAL') return null;
-  return state.schema.sentra.find(s => {
-    const st = WZ.data.meta.sentra[s.id] || {};
-    return s.id !== sid && st.owner && st.status !== 'FINAL';
-  }) || null;
+  // Mode Penilaian Paralel: Tiap sentra dinilai secara mandiri/independen
+  return null;
 }
 function wizLocked(sid) {
   if (!WZ) return true;

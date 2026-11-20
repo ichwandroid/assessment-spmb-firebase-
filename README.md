@@ -112,12 +112,11 @@ assessment-spmb/
 | Tambah/ubah data peserta | — | — | ✅ | ✅ |
 | Kelola pengguna & soal | — | — | — | ✅ |
 
-Penilaian dapat dimulai dari sentra mana pun. Setelah satu sentra mulai
-dikerjakan, sentra tersebut harus berstatus **FINAL** sebelum tim berpindah ke
-sentra lain, termasuk bila sentra berikutnya ditangani oleh guru yang berbeda.
-Assessment yang seluruh sentranya telah **FINAL** hanya dapat diakses oleh
-Koordinator dan Admin. Pemindahan tugas hanya dapat dilakukan saat sentra
-masih berstatus **DRAFT**.
+Penilaian dapat dimulai dari sentra mana pun dan berjalan secara paralel antar-sentra.
+Tiap assessor dapat menilai sentra tugasnya secara mandiri tanpa terhalang apakah
+sentra lain sudah final atau masih berstatus draft. Assessment yang seluruh sentranya
+telah **FINAL** siap di-review dan di-submit oleh Koordinator dan Admin. Pemindahan
+tugas hanya dapat dilakukan saat sentra masih berstatus **DRAFT**.
 
 ---
 
