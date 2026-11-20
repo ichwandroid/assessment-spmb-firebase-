@@ -570,6 +570,10 @@ const FirebaseService = {
     const asg = user.assignments || [];
     if (ownsFinalizedSentra) return true;
 
+    // Pembuat assessment selalu dapat mengakses assessment draft miliknya
+    const creator = String(assessment.usernameAssessor || assessment.creatorUsername || assessment.assessor || '').trim().toLowerCase();
+    if (creator && creator === String(user.username || '').trim().toLowerCase()) return true;
+
     // Mode Penilaian Paralel: Assessor dapat mengakses assessment jika ada sentra
     // yang ditugaskan kepadanya yang belum final dan belum diklaim guru lain
     // (atau sudah diklaim oleh dirinya sendiri).
@@ -668,7 +672,7 @@ const FirebaseService = {
     // tetapi bukan draft aktif guru. Draft baru tampil setelah owner tercatat.
     list.sort((a, b) => String(b.waktu_diubah || '').localeCompare(String(a.waktu_diubah || '')));
     if (user.role === 'ASSESSOR') {
-      return list.filter(item => (item.myFinalized || []).length || FORM_SCHEMA.sentra.some(s => {
+      return list.filter(item => (item.myFinalized || []).length || (item.creatorUsername && item.creatorUsername.toLowerCase() === String(user.username || '').toLowerCase()) || FORM_SCHEMA.sentra.some(s => {
         const state = (item.meta && item.meta.sentra && item.meta.sentra[s.id]) || {};
         return state.owner && state.owner.toLowerCase() === String(user.username || '').toLowerCase() && state.status !== 'FINAL';
       }));
@@ -871,10 +875,16 @@ const FirebaseService = {
         // Klaim dibuat sejak draft pertama disimpan, bukan menunggu nilai
         // pertama. Guru lain pada sentra yang sama hanya dapat melanjutkan
         // setelah Koordinator Sentra memindahkan tugasnya.
+        const asg = user.assignments || [];
         const startingSid = String(payload.active_sentra || '');
-        if ((user.assignments || []).includes(startingSid) && merged.meta.sentra[startingSid]) {
-          merged.meta.sentra[startingSid].owner = user.username;
-          merged.meta.sentra[startingSid].ownerName = user.nama;
+        let targetSid = (asg.length === 0 || asg.includes(startingSid)) && merged.meta.sentra[startingSid] ? startingSid : null;
+        if (!targetSid) {
+          const firstAssigned = FORM_SCHEMA.sentra.find(s => (asg.length === 0 || asg.includes(s.id)) && (!merged.meta.sentra[s.id].owner));
+          if (firstAssigned) targetSid = firstAssigned.id;
+        }
+        if (targetSid && merged.meta.sentra[targetSid]) {
+          merged.meta.sentra[targetSid].owner = user.username;
+          merged.meta.sentra[targetSid].ownerName = user.nama;
         }
       }
 

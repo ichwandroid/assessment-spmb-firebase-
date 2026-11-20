@@ -91,8 +91,15 @@ function normalizeWizardData(raw) {
   return out;
 }
 function wizPayload() {
+  let activeSid = '';
   const step = WZ.steps && WZ.steps[WZ.step];
-  return { id: WZ.id || null, id_peserta: WZ.id_peserta, creator: WZ.creator || '', tanggal: WZ.tanggal || '', active_sentra: step && step.type === 'sentra' ? step.sid : '', data: WZ.data };
+  if (step && step.type === 'sentra') {
+    activeSid = step.sid;
+  } else if (WZ.steps) {
+    const firstSentraStep = WZ.steps.find(st => st.type === 'sentra');
+    if (firstSentraStep) activeSid = firstSentraStep.sid;
+  }
+  return { id: WZ.id || null, id_peserta: WZ.id_peserta, creator: WZ.creator || '', tanggal: WZ.tanggal || '', active_sentra: activeSid, data: WZ.data };
 }
 function wizPriorUnfinalizedSentra(sid) {
   // Mode Penilaian Paralel: Tiap sentra dinilai secara mandiri/independen
@@ -1291,7 +1298,11 @@ async function wizOpenSwitcher() {
     state.riwayat = res.riwayat || state.riwayat;
   } catch (e) { /* gunakan daftar lokal bila penyegaran tidak tersedia */ }
 
-  const canOpen = item => item.status !== 'SUBMITTED' && (Auth.isController() || (item.myPending || []).length);
+  const canOpen = item => item.status !== 'SUBMITTED' && (
+    Auth.isController() ||
+    (item.myPending || []).length ||
+    (item.creatorUsername && String(item.creatorUsername).toLowerCase() === String((Auth.user && Auth.user.username) || '').toLowerCase())
+  );
   const items = (state.riwayat || []).filter(canOpen);
   if (WZ.id && !items.some(item => item.id === WZ.id)) items.unshift({ id: WZ.id, nama: WZ.nama, nomor: WZ.nomor, status: 'DRAFT', updated: '', myPending: [] });
   items.sort((a, b) => (a.id === WZ.id ? -1 : b.id === WZ.id ? 1 : String(b.updated || '').localeCompare(String(a.updated || ''))));

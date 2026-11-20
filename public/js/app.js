@@ -634,10 +634,12 @@ function showRiwayat() {
   const heading = staff ? 'Riwayat Assessment' : (sentraCoordinator ? 'Pemantauan Sentra' : 'Penilaian Saya');
   const description = staff ? 'Kelola semua assessment peserta' : (sentraCoordinator ? 'Pantau dan kendalikan assessment pada sentra yang ditugaskan' : 'Buka peserta untuk menilai BAB yang ditugaskan kepada Anda');
   setView(
-    '<div class="anim-in"><h2 class="text-xl font-extrabold text-slate-800">' + heading + '</h2>' +
+    '<div class="anim-in flex items-center justify-between gap-3 flex-wrap">' +
+    '<div><h2 class="text-xl font-extrabold text-slate-800">' + heading + '</h2>' +
     '<p class="text-sm text-slate-500 mt-0.5">' + description + '</p></div>' +
+    (Auth.isStaff() ? '<div class="flex items-center gap-2 flex-wrap"><button id="r-export-csv" class="btn-soft !py-2 !px-3 !text-xs">' + ic('download', 'w-4 h-4') + ' Download CSV</button></div>' : '') +
+    '</div>' +
     '<div class="card p-4 mt-4 anim-in">' +
-    (Auth.isStaff() ? '<div class="flex justify-end mb-3"><button id="r-export-csv" class="btn-soft !py-2.5 !px-3 !text-xs">' + ic('download', 'w-4 h-4') + ' Download CSV</button></div>' : '') +
     '<div class="relative">' + ic('search', 'w-5 h-5 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400') +
     '<input id="rq" class="input pad-icon" placeholder="Cari nama / nomor / pembuat..." value="' + esc(state.rQuery) + '"></div>' +
     (Auth.isAdmin() ? '<div class="mt-3"><label for="r-user-filter" class="label">Lihat assessment berdasarkan pengguna</label><select id="r-user-filter" class="input"><option value="ALL">Semua pengguna</option>' + (state.reviewUsers || []).map(u => '<option value="' + esc(u.username) + '" ' + (state.rUser === u.username ? 'selected' : '') + '>' + esc(u.nama + '  ' + u.username) + '</option>').join('') + '</select><p class="text-[11px] text-slate-400 mt-1">Termasuk assessment yang dibuat atau dikerjakan pengguna pada salah satu sentra.</p></div>' : '') +
